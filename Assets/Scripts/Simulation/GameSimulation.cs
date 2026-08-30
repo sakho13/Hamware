@@ -8,12 +8,8 @@ using System.Linq;
 /// </summary>
 public class GameSimulation
 {
-    /// <summary>
-    /// 1週間あたりのデフォルト利用可能工数
-    /// </summary>
-    private const int DefaultAvailableHours = 40;
-
     private readonly List<DevelopmentTask> _tasks = new List<DevelopmentTask>();
+    private readonly List<Employee> _employees = new List<Employee>();
     private readonly Dictionary<DevelopmentTask, int> _allocations = new Dictionary<DevelopmentTask, int>();
     private readonly WeekProcessor _weekProcessor = new WeekProcessor();
 
@@ -24,9 +20,10 @@ public class GameSimulation
 
     /// <summary>
     /// 今週、まだ割り当てられていない残り工数。
-    /// TryAllocateHoursで割り当てるたびに減少し、AdvanceWeek()で初期値へリセットされる。
+    /// AddEmployeeで社員を登録するたびに増加し、TryAllocateHoursで割り当てるたびに減少し、
+    /// AdvanceWeek()で在籍社員の合計工数へリセットされる。
     /// </summary>
-    public int AvailableHours { get; private set; } = DefaultAvailableHours;
+    public int AvailableHours { get; private set; } = 0;
 
     /// <summary>
     /// 今週、既にタスクへ割り当て済みの工数の合計
@@ -39,6 +36,17 @@ public class GameSimulation
     public IReadOnlyList<DevelopmentTask> Tasks => _tasks;
 
     /// <summary>
+    /// 登録されている社員一覧
+    /// </summary>
+    public IReadOnlyList<Employee> Employees => _employees;
+
+    /// <summary>
+    /// 在籍社員のWeeklyAvailableHoursの合計。
+    /// AdvanceWeek()実行後のAvailableHoursはこの値へリセットされる。
+    /// </summary>
+    public int TotalWeeklyHours => _employees.Sum(e => e.WeeklyAvailableHours);
+
+    /// <summary>
     /// 開発タスクを登録する。
     /// </summary>
     public void AddTask(DevelopmentTask task)
@@ -49,6 +57,21 @@ public class GameSimulation
         }
 
         _tasks.Add(task);
+    }
+
+    /// <summary>
+    /// 社員を登録する。
+    /// 登録と同時に、その社員のWeeklyAvailableHours分だけAvailableHoursへ加算される。
+    /// </summary>
+    public void AddEmployee(Employee employee)
+    {
+        if (employee == null)
+        {
+            return;
+        }
+
+        _employees.Add(employee);
+        AvailableHours += employee.WeeklyAvailableHours;
     }
 
     /// <summary>
@@ -79,7 +102,7 @@ public class GameSimulation
     /// 週を進める。
     /// 1. 今週の割当を各タスクの進捗へ反映する
     /// 2. 週番号を1進める
-    /// 3. 利用可能工数を初期値へ戻す
+    /// 3. 利用可能工数を在籍社員の合計工数(TotalWeeklyHours)へ戻す
     /// 4. 割当状態をクリアする(翌週へ持ち越さない)
     /// </summary>
     public void AdvanceWeek()
@@ -88,6 +111,6 @@ public class GameSimulation
 
         _allocations.Clear();
         CurrentWeek++;
-        AvailableHours = DefaultAvailableHours;
+        AvailableHours = TotalWeeklyHours;
     }
 }
