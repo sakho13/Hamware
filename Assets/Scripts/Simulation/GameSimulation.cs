@@ -3,7 +3,7 @@ using System.Linq;
 
 /// <summary>
 /// ゲーム全体のシミュレーション状態を保持するオーケストレーター。
-/// 週・利用可能工数・登録タスク・当週の割当状態を管理し、
+/// 週・残り利用可能工数・登録タスク・当週の割当状態を管理し、
 /// AdvanceWeek() で週次処理をまとめて実行する。
 /// </summary>
 public class GameSimulation
@@ -23,7 +23,8 @@ public class GameSimulation
     public int CurrentWeek { get; private set; } = 1;
 
     /// <summary>
-    /// 今週使える工数
+    /// 今週、まだ割り当てられていない残り工数。
+    /// TryAllocateHoursで割り当てるたびに減少し、AdvanceWeek()で初期値へリセットされる。
     /// </summary>
     public int AvailableHours { get; private set; } = DefaultAvailableHours;
 
@@ -31,11 +32,6 @@ public class GameSimulation
     /// 今週、既にタスクへ割り当て済みの工数の合計
     /// </summary>
     public int AllocatedHours => _allocations.Values.Sum();
-
-    /// <summary>
-    /// 今週、まだ割り当てられていない残り工数
-    /// </summary>
-    public int RemainingHours => AvailableHours - AllocatedHours;
 
     /// <summary>
     /// 登録されている開発タスク一覧
@@ -57,7 +53,8 @@ public class GameSimulation
 
     /// <summary>
     /// 指定タスクへ工数を割り当てる。
-    /// 0以下の工数、または利用可能工数を超える割り当ては拒否しfalseを返す。
+    /// 0以下の工数、または残り利用可能工数を超える割り当ては拒否しfalseを返す。
+    /// 割当に成功すると、その分だけAvailableHoursが減少する。
     /// 同一タスクへ複数回呼び出した場合は加算される。
     /// </summary>
     public bool TryAllocateHours(DevelopmentTask task, int hours)
@@ -67,13 +64,14 @@ public class GameSimulation
             return false;
         }
 
-        if (AllocatedHours + hours > AvailableHours)
+        if (hours > AvailableHours)
         {
             return false;
         }
 
         _allocations.TryGetValue(task, out var current);
         _allocations[task] = current + hours;
+        AvailableHours -= hours;
         return true;
     }
 

@@ -1,4 +1,4 @@
-using UnityEngine;
+using System;
 
 /// <summary>
 /// 開発タスクを表すドメインモデル。
@@ -26,8 +26,17 @@ public class DevelopmentTask
     /// </summary>
     public bool IsCompleted => CompletedHours >= RequiredHours;
 
+    /// <summary>
+    /// 開発タスクを生成する。
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">requiredHoursが0以下の場合</exception>
     public DevelopmentTask(string name, int requiredHours)
     {
+        if (requiredHours <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(requiredHours), "RequiredHoursは1以上である必要があります。");
+        }
+
         Name = name;
         RequiredHours = requiredHours;
         CompletedHours = 0;
@@ -45,6 +54,6 @@ public class DevelopmentTask
             return;
         }
 
-        CompletedHours = Mathf.Min(CompletedHours + hours, RequiredHours);
+        CompletedHours = Math.Min(CompletedHours + hours, RequiredHours);
     }
 }

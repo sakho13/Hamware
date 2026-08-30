@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 
 public class DevelopmentTaskTests
@@ -54,5 +55,17 @@ public class DevelopmentTaskTests
         task.ApplyProgress(-5);
 
         Assert.AreEqual(10, task.CompletedHours);
+    }
+
+    [Test]
+    public void Constructor_RequiredHoursIsZero_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DevelopmentTask("task", 0));
+    }
+
+    [Test]
+    public void Constructor_RequiredHoursIsNegative_ThrowsArgumentOutOfRangeException()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DevelopmentTask("task", -5));
     }
 }

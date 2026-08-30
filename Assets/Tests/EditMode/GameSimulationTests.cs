@@ -27,6 +27,7 @@ public class GameSimulationTests
         Assert.IsTrue(result1);
         Assert.IsTrue(result2);
         Assert.AreEqual(40, simulation.AllocatedHours);
+        Assert.AreEqual(0, simulation.AvailableHours); // 40hを全て割り当て済み
     }
 
     [Test]
@@ -40,6 +41,7 @@ public class GameSimulationTests
 
         Assert.IsFalse(result);
         Assert.AreEqual(0, simulation.AllocatedHours);
+        Assert.AreEqual(40, simulation.AvailableHours); // 失敗時は変化しない
     }
 
     [Test]
@@ -74,9 +76,11 @@ public class GameSimulationTests
         simulation.AddTask(task);
         simulation.TryAllocateHours(task, 20);
 
+        Assert.AreEqual(20, simulation.AvailableHours); // 40 - 20 = 20 に減っていることを確認
+
         simulation.AdvanceWeek();
 
-        Assert.AreEqual(40, simulation.AvailableHours);
+        Assert.AreEqual(40, simulation.AvailableHours); // リセットされている
     }
 
     [Test]
@@ -103,6 +107,9 @@ public class GameSimulationTests
 
         simulation.TryAllocateHours(login, 20);
         simulation.TryAllocateHours(csv, 20);
+
+        Assert.AreEqual(0, simulation.AvailableHours);
+
         simulation.AdvanceWeek();
 
         Assert.AreEqual(2, simulation.CurrentWeek);
