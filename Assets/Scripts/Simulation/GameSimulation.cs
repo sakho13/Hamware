@@ -3,14 +3,15 @@ using System.Linq;
 
 /// <summary>
 /// ゲーム全体のシミュレーション状態を保持するオーケストレーター。
-/// 週・残り利用可能工数・登録タスク・当週の割当状態を管理し、
+/// 週・登録タスク・登録社員・当週の社員ごとの割当状態を管理し、
 /// AdvanceWeek() で週次処理をまとめて実行する。
 /// </summary>
 public class GameSimulation
 {
     private readonly List<DevelopmentTask> _tasks = new List<DevelopmentTask>();
     private readonly List<Employee> _employees = new List<Employee>();
-    private readonly Dictionary<DevelopmentTask, int> _allocations = new Dictionary<DevelopmentTask, int>();
+    private readonly Dictionary<DevelopmentTask, Dictionary<Employee, int>> _allocations =
+        new Dictionary<DevelopmentTask, Dictionary<Employee, int>>();
     private readonly WeekProcessor _weekProcessor = new WeekProcessor();
 
     /// <summary>
@@ -19,16 +20,15 @@ public class GameSimulation
     public int CurrentWeek { get; private set; } = 1;
 
     /// <summary>
-    /// 今週、まだ割り当てられていない残り工数。
-    /// AddEmployeeで社員を登録するたびに増加し、TryAllocateHoursで割り当てるたびに減少し、
-    /// AdvanceWeek()で在籍社員の合計工数へリセットされる。
+    /// 在籍社員のAvailableHoursの合計。
+    /// 各社員のAvailableHoursから都度計算される。
     /// </summary>
-    public int AvailableHours { get; private set; } = 0;
+    public int AvailableHours => _employees.Sum(e => e.AvailableHours);
 
     /// <summary>
     /// 今週、既にタスクへ割り当て済みの工数の合計
     /// </summary>
-    public int AllocatedHours => _allocations.Values.Sum();
+    public int AllocatedHours => _allocations.Values.SelectMany(d => d.Values).Sum();
 
     /// <summary>
     /// 登録されている開発タスク一覧
@@ -42,7 +42,6 @@ public class GameSimulation
 
     /// <summary>
     /// 在籍社員のWeeklyAvailableHoursの合計。
-    /// AdvanceWeek()実行後のAvailableHoursはこの値へリセットされる。
     /// </summary>
     public int TotalWeeklyHours => _employees.Sum(e => e.WeeklyAvailableHours);
 
@@ -61,7 +60,6 @@ public class GameSimulation
 
     /// <summary>
     /// 社員を登録する。
-    /// 登録と同時に、その社員のWeeklyAvailableHours分だけAvailableHoursへ加算される。
     /// </summary>
     public void AddEmployee(Employee employee)
     {
@@ -71,46 +69,77 @@ public class GameSimulation
         }
 
         _employees.Add(employee);
-        AvailableHours += employee.WeeklyAvailableHours;
     }
 
     /// <summary>
-    /// 指定タスクへ工数を割り当てる。
-    /// 0以下の工数、または残り利用可能工数を超える割り当ては拒否しfalseを返す。
-    /// 割当に成功すると、その分だけAvailableHoursが減少する。
-    /// 同一タスクへ複数回呼び出した場合は加算される。
+    /// 指定した社員から指定したタスクへ工数を割り当てる。
+    /// 以下のいずれかに該当する場合は割当を拒否しfalseを返す:
+    /// - employeeまたはtaskがnull
+    /// - hoursが0以下
+    /// - employeeが未登録
+    /// - taskが未登録
+    /// - taskが完了済み
+    /// - hoursがemployeeの残り利用可能工数を超える
+    /// 割当に成功すると、employeeのAvailableHoursがhours分減少する。
+    /// 同一社員から同一タスクへ複数回呼び出した場合は加算される。
     /// </summary>
-    public bool TryAllocateHours(DevelopmentTask task, int hours)
+    public bool TryAllocateHours(Employee employee, DevelopmentTask task, int hours)
     {
-        if (task == null || hours <= 0)
+        if (employee == null || task == null || hours <= 0)
         {
             return false;
         }
 
-        if (hours > AvailableHours)
+        if (!_employees.Contains(employee) || !_tasks.Contains(task))
         {
             return false;
         }
 
-        _allocations.TryGetValue(task, out var current);
-        _allocations[task] = current + hours;
-        AvailableHours -= hours;
+        if (task.IsCompleted)
+        {
+            return false;
+        }
+
+        if (!employee.TryConsumeHours(hours))
+        {
+            return false;
+        }
+
+        if (!_allocations.TryGetValue(task, out var perEmployee))
+        {
+            perEmployee = new Dictionary<Employee, int>();
+            _allocations[task] = perEmployee;
+        }
+
+        perEmployee.TryGetValue(employee, out var current);
+        perEmployee[employee] = current + hours;
+
         return true;
     }
 
     /// <summary>
     /// 週を進める。
-    /// 1. 今週の割当を各タスクの進捗へ反映する
+    /// 1. 今週の社員ごとの割当をタスク単位に合算し、各タスクの進捗へ反映する
     /// 2. 週番号を1進める
-    /// 3. 利用可能工数を在籍社員の合計工数(TotalWeeklyHours)へ戻す
-    /// 4. 割当状態をクリアする(翌週へ持ち越さない)
+    /// 3. 割当状態をクリアする(翌週へ持ち越さない)
+    /// 4. 各社員の残り利用可能工数をWeeklyAvailableHoursへリセットする
     /// </summary>
     public void AdvanceWeek()
     {
-        _weekProcessor.Process(_allocations);
+        var taskTotals = new Dictionary<DevelopmentTask, int>();
+        foreach (var entry in _allocations)
+        {
+            taskTotals[entry.Key] = entry.Value.Values.Sum();
+        }
+
+        _weekProcessor.Process(taskTotals);
 
         _allocations.Clear();
         CurrentWeek++;
-        AvailableHours = TotalWeeklyHours;
+
+        foreach (var employee in _employees)
+        {
+            employee.ResetWeeklyHours();
+        }
     }
 }
