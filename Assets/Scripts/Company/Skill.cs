@@ -32,9 +32,18 @@ public class Skill
     /// <summary>
     /// スキルを生成する。
     /// </summary>
-    /// <exception cref="ArgumentOutOfRangeException">levelがMinLevel未満またはMaxLevelを超える場合</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// typeが未定義のSkillTypeの場合、またはlevelがMinLevel未満またはMaxLevelを超える場合
+    /// </exception>
     public Skill(SkillType type, int level)
     {
+        if (!Enum.IsDefined(typeof(SkillType), type))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(type),
+                "Typeは定義済みのSkillTypeである必要があります。");
+        }
+
         if (level < MinLevel || level > MaxLevel)
         {
             throw new ArgumentOutOfRangeException(
