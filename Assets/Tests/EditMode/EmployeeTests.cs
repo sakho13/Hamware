@@ -38,6 +38,30 @@ public class EmployeeTests
 
         Assert.AreEqual("ハム田", employee.Name);
         Assert.AreEqual(40, employee.WeeklyAvailableHours);
+        Assert.AreEqual(0m, employee.Fatigue);
+    }
+
+    [TestCase(0)]
+    [TestCase(50)]
+    [TestCase(100)]
+    public void Constructor_ValidInitialFatigue_SetsFatigueWithoutChangingHours(int fatigue)
+    {
+        var employee = new Employee("社員", 40, initialFatigue: fatigue);
+
+        Assert.AreEqual((decimal)fatigue, employee.Fatigue);
+        Assert.AreEqual(40, employee.AvailableHours);
+    }
+
+    [Test]
+    public void Constructor_FractionalInitialFatigue_IsPreservedAndRangeValidated()
+    {
+        Assert.AreEqual(2.5m, new Employee("社員", 40, initialFatigue: 2.5m).Fatigue);
+        var below = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new Employee("社員", 40, initialFatigue: -0.01m));
+        var above = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new Employee("社員", 40, initialFatigue: 100.01m));
+        Assert.AreEqual("initialFatigue", below.ParamName);
+        Assert.AreEqual("initialFatigue", above.ParamName);
     }
 
     [Test]
@@ -106,12 +130,13 @@ public class EmployeeTests
     [Test]
     public void ResetWeeklyHours_RestoresAvailableHoursToWeeklyAvailableHours()
     {
-        var employee = new Employee("ハム田", 40);
+        var employee = new Employee("ハム田", 40, initialFatigue: 50m);
         employee.TryConsumeHours(30);
 
         employee.ResetWeeklyHours();
 
         Assert.AreEqual(40, employee.AvailableHours);
+        Assert.AreEqual(50m, employee.Fatigue);
     }
 
     [Test]

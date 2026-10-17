@@ -6,6 +6,36 @@ public class ProductivityCalculatorTests
 {
     private readonly ProductivityCalculator _calculator = new ProductivityCalculator();
 
+    [TestCase(0, 12)]
+    [TestCase(50, 9)]
+    [TestCase(100, 6)]
+    public void CalculateProgress_SameSkillAndHours_HigherFatigueReducesProgress(int fatigue, int expected)
+    {
+        var backend = new Skill(SkillType.Backend, 4);
+        var employee = new Employee("社員", 40, new[] { backend }, initialFatigue: fatigue);
+        Assert.IsTrue(employee.TryConsumeHours(10));
+        var profile = TaskSkillProfiles.Get(TaskType.BackendImplementation);
+
+        Assert.AreEqual((decimal)expected, _calculator.CalculateProgress(employee, profile, 10));
+        Assert.AreEqual((decimal)expected, _calculator.CalculateProgress(employee, profile, 10));
+
+        Assert.AreEqual((decimal)fatigue, employee.Fatigue);
+        Assert.AreEqual(30, employee.AvailableHours);
+        Assert.AreEqual(1, employee.Skills.Count);
+        Assert.IsTrue(employee.TryGetSkill(SkillType.Backend, out var actual));
+        Assert.AreSame(backend, actual);
+        Assert.AreEqual(4, actual.Level);
+    }
+
+    [Test]
+    public void CalculateProgress_FractionalFatigue_DoesNotRoundProgress()
+    {
+        var employee = new Employee("社員", 40, new[] { new Skill(SkillType.Backend, 4) }, initialFatigue: 0.1m);
+
+        Assert.AreEqual(1.1994m, _calculator.CalculateProgress(
+            employee, TaskSkillProfiles.Get(TaskType.BackendImplementation), 1));
+    }
+
     [TestCase(0, 20)]
     [TestCase(1, 30)]
     [TestCase(2, 40)]

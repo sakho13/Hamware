@@ -1,7 +1,7 @@
 using System;
 
 /// <summary>
-/// 基本スキルから実勤務工数を進捗工数へ変換する。社員やタスクの状態は変更しない。
+/// 基本スキルと疲労から実勤務工数を進捗工数へ変換する。社員やタスクの状態は変更しない。
 /// </summary>
 public sealed class ProductivityCalculator
 {
@@ -10,8 +10,8 @@ public sealed class ProductivityCalculator
     private const decimal MultiplierPerLevel = 0.25m;
 
     /// <summary>
-    /// 倍率 = 0.5 + 0.25 × Σ(スキルレベル × 重み)。未習得は計算上0。
-    /// 未習得の重みも維持し、端数を丸めずに返す。
+    /// スキル倍率 = 0.5 + 0.25 × Σ(スキルレベル × 重み)。未習得は計算上0。
+    /// 実勤務工数へスキル倍率と疲労倍率を乗算する。未習得の重みも維持し、端数を丸めずに返す。
     /// </summary>
     /// <exception cref="ArgumentNullException">employeeまたはprofileがnullの場合</exception>
     /// <exception cref="ArgumentOutOfRangeException">workedHoursが負の場合</exception>
@@ -41,6 +41,7 @@ public sealed class ProductivityCalculator
             }
         }
 
-        return workedHours * (BaseMultiplier + MultiplierPerLevel * effectiveLevel);
+        decimal skillMultiplier = BaseMultiplier + MultiplierPerLevel * effectiveLevel;
+        return workedHours * skillMultiplier * FatigueCalculator.CalculateProductivityMultiplier(employee.Fatigue);
     }
 }
