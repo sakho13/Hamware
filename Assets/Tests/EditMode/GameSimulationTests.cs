@@ -2,6 +2,17 @@ using NUnit.Framework;
 
 public class GameSimulationTests
 {
+    // 従来の工数配分テストでは、関連スキルLv2で進捗倍率を1に揃える。
+    private static Employee CreateEmployee(string name, int hours)
+    {
+        return new Employee(name, hours, new[]
+        {
+            new Skill(SkillType.Backend, 2),
+            new Skill(SkillType.Database, 2),
+            new Skill(SkillType.Testing, 2)
+        });
+    }
+
     [Test]
     public void AdvanceWeek_IncreasesCurrentWeek()
     {
@@ -16,8 +27,8 @@ public class GameSimulationTests
     public void AddEmployee_MultipleEmployees_AreAllRegistered()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
-        var hamkawa = new Employee("ハム川", 40);
+        var hamda = CreateEmployee("ハム田", 40);
+        var hamkawa = CreateEmployee("ハム川", 40);
 
         simulation.AddEmployee(hamda);
         simulation.AddEmployee(hamkawa);
@@ -32,8 +43,8 @@ public class GameSimulationTests
     {
         var simulation = new GameSimulation();
 
-        simulation.AddEmployee(new Employee("ハム田", 40));
-        simulation.AddEmployee(new Employee("ハム川", 40));
+        simulation.AddEmployee(CreateEmployee("ハム田", 40));
+        simulation.AddEmployee(CreateEmployee("ハム川", 40));
 
         Assert.AreEqual(80, simulation.TotalWeeklyHours);
         Assert.AreEqual(80, simulation.AvailableHours);
@@ -43,10 +54,10 @@ public class GameSimulationTests
     public void TryAllocateHours_SingleEmployeeMultipleTasks_Succeeds()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
+        var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
-        var login = new DevelopmentTask("ログイン機能", 30);
-        var csv = new DevelopmentTask("CSV出力", 40);
+        var login = new DevelopmentTask("ログイン機能", 30, TaskType.BackendImplementation);
+        var csv = new DevelopmentTask("CSV出力", 40, TaskType.BackendImplementation);
         simulation.AddTask(login);
         simulation.AddTask(csv);
 
@@ -63,11 +74,11 @@ public class GameSimulationTests
     public void TryAllocateHours_MultipleEmployeesSameTask_Succeeds()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
-        var hamkawa = new Employee("ハム川", 40);
+        var hamda = CreateEmployee("ハム田", 40);
+        var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
         simulation.AddEmployee(hamkawa);
-        var login = new DevelopmentTask("ログイン機能", 60);
+        var login = new DevelopmentTask("ログイン機能", 60, TaskType.BackendImplementation);
         simulation.AddTask(login);
 
         var result1 = simulation.TryAllocateHours(hamda, login, 30);
@@ -82,9 +93,9 @@ public class GameSimulationTests
     public void TryAllocateHours_ExceedsEmployeeWeeklyHours_ReturnsFalse()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
+        var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
-        var task = new DevelopmentTask("CSV出力", 100);
+        var task = new DevelopmentTask("CSV出力", 100, TaskType.BackendImplementation);
         simulation.AddTask(task);
 
         var result = simulation.TryAllocateHours(hamda, task, 41);
@@ -98,9 +109,9 @@ public class GameSimulationTests
     public void TryAllocateHours_ZeroOrNegativeHours_ReturnsFalse()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
+        var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
-        var task = new DevelopmentTask("CSV出力", 100);
+        var task = new DevelopmentTask("CSV出力", 100, TaskType.BackendImplementation);
         simulation.AddTask(task);
 
         Assert.IsFalse(simulation.TryAllocateHours(hamda, task, 0));
@@ -111,9 +122,9 @@ public class GameSimulationTests
     public void TryAllocateHours_UnregisteredEmployee_ReturnsFalse()
     {
         var simulation = new GameSimulation();
-        var registeredTask = new DevelopmentTask("CSV出力", 100);
+        var registeredTask = new DevelopmentTask("CSV出力", 100, TaskType.BackendImplementation);
         simulation.AddTask(registeredTask);
-        var unregisteredEmployee = new Employee("ハム鈴", 40);
+        var unregisteredEmployee = CreateEmployee("ハム鈴", 40);
 
         var result = simulation.TryAllocateHours(unregisteredEmployee, registeredTask, 10);
 
@@ -126,9 +137,9 @@ public class GameSimulationTests
     public void TryAllocateHours_UnregisteredTask_ReturnsFalse()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
+        var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
-        var unregisteredTask = new DevelopmentTask("未登録タスク", 100);
+        var unregisteredTask = new DevelopmentTask("未登録タスク", 100, TaskType.BackendImplementation);
 
         var result = simulation.TryAllocateHours(hamda, unregisteredTask, 10);
 
@@ -141,9 +152,9 @@ public class GameSimulationTests
     public void TryAllocateHours_CompletedTask_ReturnsFalse()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
+        var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
-        var task = new DevelopmentTask("小さいタスク", 10);
+        var task = new DevelopmentTask("小さいタスク", 10, TaskType.BackendImplementation);
         simulation.AddTask(task);
         simulation.TryAllocateHours(hamda, task, 10);
         simulation.AdvanceWeek();
@@ -160,29 +171,29 @@ public class GameSimulationTests
     public void AdvanceWeek_SumsMultipleEmployeeAllocationsIntoTaskProgress()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
-        var hamkawa = new Employee("ハム川", 40);
+        var hamda = CreateEmployee("ハム田", 40);
+        var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
         simulation.AddEmployee(hamkawa);
-        var login = new DevelopmentTask("ログイン機能", 60);
+        var login = new DevelopmentTask("ログイン機能", 60, TaskType.BackendImplementation);
         simulation.AddTask(login);
         simulation.TryAllocateHours(hamda, login, 30);
         simulation.TryAllocateHours(hamkawa, login, 20);
 
         simulation.AdvanceWeek();
 
-        Assert.AreEqual(50, login.CompletedHours);
+        Assert.AreEqual(50, login.CompletedProgressHours);
     }
 
     [Test]
     public void AdvanceWeek_ResetsEachEmployeeAndTeamAvailableHours()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
-        var hamkawa = new Employee("ハム川", 40);
+        var hamda = CreateEmployee("ハム田", 40);
+        var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
         simulation.AddEmployee(hamkawa);
-        var task = new DevelopmentTask("ログイン機能", 60);
+        var task = new DevelopmentTask("ログイン機能", 60, TaskType.BackendImplementation);
         simulation.AddTask(task);
         simulation.TryAllocateHours(hamda, task, 30);
         simulation.TryAllocateHours(hamkawa, task, 20);
@@ -201,9 +212,9 @@ public class GameSimulationTests
     public void AdvanceWeek_ClearsPreviousWeekAllocationState()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
+        var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
-        var task = new DevelopmentTask("ログイン機能", 60);
+        var task = new DevelopmentTask("ログイン機能", 60, TaskType.BackendImplementation);
         simulation.AddTask(task);
         simulation.TryAllocateHours(hamda, task, 20);
 
@@ -219,12 +230,12 @@ public class GameSimulationTests
     public void AdvanceWeek_MatchesIssueExampleScenario()
     {
         var simulation = new GameSimulation();
-        var hamda = new Employee("ハム田", 40);
-        var hamkawa = new Employee("ハム川", 40);
+        var hamda = CreateEmployee("ハム田", 40);
+        var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
         simulation.AddEmployee(hamkawa);
-        var login = new DevelopmentTask("ログイン機能", 60);
-        var csv = new DevelopmentTask("CSV出力", 40);
+        var login = new DevelopmentTask("ログイン機能", 60, TaskType.BackendImplementation);
+        var csv = new DevelopmentTask("CSV出力", 40, TaskType.BackendImplementation);
         simulation.AddTask(login);
         simulation.AddTask(csv);
 
@@ -239,8 +250,8 @@ public class GameSimulationTests
         simulation.AdvanceWeek();
 
         Assert.AreEqual(2, simulation.CurrentWeek);
-        Assert.AreEqual(50, login.CompletedHours);
-        Assert.AreEqual(30, csv.CompletedHours);
+        Assert.AreEqual(50, login.CompletedProgressHours);
+        Assert.AreEqual(30, csv.CompletedProgressHours);
         Assert.AreEqual(80, simulation.AvailableHours);
     }
 }

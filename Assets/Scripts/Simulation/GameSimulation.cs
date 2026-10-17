@@ -26,7 +26,7 @@ public class GameSimulation
     public int AvailableHours => _employees.Sum(e => e.AvailableHours);
 
     /// <summary>
-    /// 今週、既にタスクへ割り当て済みの工数の合計
+    /// 今週、既にタスクへ割り当て済みの実勤務工数の合計(補正後の進捗ではない)
     /// </summary>
     public int AllocatedHours => _allocations.Values.SelectMany(d => d.Values).Sum();
 
@@ -119,20 +119,14 @@ public class GameSimulation
 
     /// <summary>
     /// 週を進める。
-    /// 1. 今週の社員ごとの割当をタスク単位に合算し、各タスクの進捗へ反映する
-    /// 2. 週番号を1進める
-    /// 3. 割当状態をクリアする(翌週へ持ち越さない)
+    /// 1. WeekProcessorで社員ごとに割当工数を補正・合算し、各タスクの進捗へ反映する
+    /// 2. 割当状態をクリアする(翌週へ持ち越さない)
+    /// 3. 週番号を1進める
     /// 4. 各社員の残り利用可能工数をWeeklyAvailableHoursへリセットする
     /// </summary>
     public void AdvanceWeek()
     {
-        var taskTotals = new Dictionary<DevelopmentTask, int>();
-        foreach (var entry in _allocations)
-        {
-            taskTotals[entry.Key] = entry.Value.Values.Sum();
-        }
-
-        _weekProcessor.Process(taskTotals);
+        _weekProcessor.Process(_allocations);
 
         _allocations.Clear();
         CurrentWeek++;

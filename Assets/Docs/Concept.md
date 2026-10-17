@@ -14,6 +14,7 @@ Hamware は、スタートアップのソフトウェア開発現場を題材に
 | --- | --- |
 | Employee | Domains/Employee.md |
 | Skill | Domains/Skill.md |
+| TaskSkillProfile / ProductivityCalculator | Domains/TaskSkillProfile.md |
 | DevelopmentTask | Domains/DevelopmentTask.md |
 | GameSimulation | Domains/GameSimulation.md |
 | WeekProcessor | Domains/WeekProcessor.md |

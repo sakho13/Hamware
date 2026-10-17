@@ -2,7 +2,7 @@ using System;
 
 /// <summary>
 /// 開発タスクを表すドメインモデル。
-/// 名前・必要工数・完了済み工数を保持し、工数の進捗反映を行う。
+/// 名前・タスク種別・必要進捗工数・完了済み進捗工数を保持する。
 /// </summary>
 public class DevelopmentTask
 {
@@ -12,48 +12,60 @@ public class DevelopmentTask
     public string Name { get; }
 
     /// <summary>
-    /// タスク完了に必要な工数(時間)
+    /// 基本スキルとの対応を決める仕事の種類
     /// </summary>
-    public int RequiredHours { get; }
+    public TaskType Type { get; }
 
     /// <summary>
-    /// これまでに完了した工数(時間)
+    /// タスク完了に必要な基準進捗工数(時間相当)
     /// </summary>
-    public int CompletedHours { get; private set; }
+    public int RequiredProgressHours { get; }
 
     /// <summary>
-    /// 完了済み工数が必要工数以上になっている場合にtrue
+    /// 補正後の累積進捗工数(時間相当)。実際の消費勤務時間とは異なる。
     /// </summary>
-    public bool IsCompleted => CompletedHours >= RequiredHours;
+    public decimal CompletedProgressHours { get; private set; }
+
+    /// <summary>
+    /// 完了済み進捗工数が必要進捗工数以上になっている場合にtrue
+    /// </summary>
+    public bool IsCompleted => CompletedProgressHours >= RequiredProgressHours;
 
     /// <summary>
     /// 開発タスクを生成する。
     /// </summary>
-    /// <exception cref="ArgumentOutOfRangeException">requiredHoursが0以下の場合</exception>
-    public DevelopmentTask(string name, int requiredHours)
+    /// <exception cref="ArgumentOutOfRangeException">requiredProgressHoursが0以下、またはtypeが未定義の場合</exception>
+    public DevelopmentTask(string name, int requiredProgressHours, TaskType type)
     {
-        if (requiredHours <= 0)
+        if (requiredProgressHours <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(requiredHours), "RequiredHoursは1以上である必要があります。");
+            throw new ArgumentOutOfRangeException(nameof(requiredProgressHours), "RequiredProgressHoursは1以上である必要があります。");
+        }
+
+        if (!Enum.IsDefined(typeof(TaskType), type))
+        {
+            throw new ArgumentOutOfRangeException(nameof(type), "定義済みのTaskTypeが必要です。");
         }
 
         Name = name;
-        RequiredHours = requiredHours;
-        CompletedHours = 0;
+        Type = type;
+        RequiredProgressHours = requiredProgressHours;
+        CompletedProgressHours = 0;
     }
 
     /// <summary>
-    /// 工数をこのタスクの進捗へ反映する。
-    /// 0以下の工数は無視する。
-    /// 完了済みタスクへ過剰な工数を適用しても、完了済み工数はRequiredHoursを超えない。
+    /// 補正後の進捗工数を反映する。端数は丸めずに蓄積する。
+    /// 0以下の進捗工数は無視する。
+    /// 完了済みタスクへ過剰な進捗を適用しても、累積進捗工数はRequiredProgressHoursを超えない。
     /// </summary>
-    public void ApplyProgress(int hours)
+    public void ApplyProgress(decimal progressHours)
     {
-        if (hours <= 0)
+        if (progressHours <= 0)
         {
             return;
         }
 
-        CompletedHours = Math.Min(CompletedHours + hours, RequiredHours);
+        // 加算前に残工数で上限をかけ、大きな入力でもオーバーフローを避ける。
+        CompletedProgressHours += Math.Min(progressHours, RequiredProgressHours - CompletedProgressHours);
     }
 }
