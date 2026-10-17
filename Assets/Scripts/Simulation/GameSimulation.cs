@@ -119,21 +119,21 @@ public class GameSimulation
 
     /// <summary>
     /// 週を進める。
-    /// 1. WeekProcessorで社員ごとに割当工数を補正・合算し、各タスクの進捗へ反映する
-    /// 2. 割当状態をクリアする(翌週へ持ち越さない)
-    /// 3. 週番号を1進める
-    /// 4. 各社員の残り利用可能工数をWeeklyAvailableHoursへリセットする
+    /// 1. 更新前の疲労とスキルで社員ごとの割当工数を補正・合算し、全タスクの進捗へ反映する
+    /// 2. 各社員の疲労を今週の消費勤務時間で更新し、翌週の利用可能工数を復元する
+    /// 3. 割当状態をクリアする(翌週へ持ち越さない)
+    /// 4. 週番号を1進める
     /// </summary>
     public void AdvanceWeek()
     {
         _weekProcessor.Process(_allocations);
 
+        foreach (var employee in _employees.Distinct())
+        {
+            employee.CompleteWeek();
+        }
+
         _allocations.Clear();
         CurrentWeek++;
-
-        foreach (var employee in _employees)
-        {
-            employee.ResetWeeklyHours();
-        }
     }
 }

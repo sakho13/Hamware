@@ -5,7 +5,7 @@ using System.Collections.Generic;
 /// 社員を表すドメインモデル。
 /// 名前と1週間あたりの利用可能工数を持ち、
 /// 週内の残り利用可能工数を自身で管理する。
-/// また、基本スキル(種類とレベル)の集合を自身で管理する。
+/// また、基本スキル(種類とレベル)の集合と疲労を自身で管理する。
 /// 職種はEmployeeの固定属性としては持たない
 /// (将来的な採用時のスキル分布テンプレート/表示ラベルとして別概念で扱う想定)。
 /// </summary>
@@ -31,6 +31,11 @@ public class Employee
     public int AvailableHours { get; private set; }
 
     /// <summary>
+    /// 疲労値(0〜100)。週末に実勤務工数から更新され、翌週の生産性へ影響する。
+    /// </summary>
+    public decimal Fatigue { get; private set; }
+
+    /// <summary>
     /// 保有している基本スキル一覧。
     /// スキルを持たない場合は空のコレクションになる。
     /// </summary>
@@ -45,8 +50,9 @@ public class Employee
     /// 初期スキル分布。省略した場合(null)はスキルなしの状態で生成される。
     /// 同一SkillTypeが複数含まれる場合は後勝ち(upsert)で反映される。
     /// </param>
-    /// <exception cref="ArgumentOutOfRangeException">weeklyAvailableHoursが0以下の場合</exception>
-    public Employee(string name, int weeklyAvailableHours, IEnumerable<Skill> initialSkills = null)
+    /// <param name="initialFatigue">初期疲労値(0〜100)。省略時は0。</param>
+    /// <exception cref="ArgumentOutOfRangeException">weeklyAvailableHoursが0以下、またはinitialFatigueが範囲外の場合</exception>
+    public Employee(string name, int weeklyAvailableHours, IEnumerable<Skill> initialSkills = null, decimal initialFatigue = 0m)
     {
         if (weeklyAvailableHours <= 0)
         {
@@ -55,9 +61,15 @@ public class Employee
                 "WeeklyAvailableHoursは1以上である必要があります。");
         }
 
+        if (initialFatigue < FatigueCalculator.MinFatigue || initialFatigue > FatigueCalculator.MaxFatigue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(initialFatigue), "初期疲労は0以上100以下である必要があります。");
+        }
+
         Name = name;
         WeeklyAvailableHours = weeklyAvailableHours;
         AvailableHours = weeklyAvailableHours;
+        Fatigue = initialFatigue;
 
         if (initialSkills != null)
         {
@@ -86,11 +98,22 @@ public class Employee
 
     /// <summary>
     /// 残り利用可能工数をWeeklyAvailableHoursへリセットする。
-    /// 週次処理(AdvanceWeek)から呼び出される想定。
+    /// 疲労は変更しない。週次処理では疲労更新を含むCompleteWeekを使用する。
     /// </summary>
     public void ResetWeeklyHours()
     {
         AvailableHours = WeeklyAvailableHours;
+    }
+
+    /// <summary>
+    /// 今週の消費勤務時間から疲労を更新した後、翌週の利用可能工数を復元する。
+    /// 全タスクの進捗反映後にGameSimulationから一度だけ呼び出す。
+    /// </summary>
+    internal void CompleteWeek()
+    {
+        int workedHours = WeeklyAvailableHours - AvailableHours;
+        Fatigue = FatigueCalculator.CalculateNextFatigue(Fatigue, workedHours, WeeklyAvailableHours);
+        ResetWeeklyHours();
     }
 
     /// <summary>

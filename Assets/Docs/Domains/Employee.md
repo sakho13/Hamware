@@ -8,3 +8,7 @@ Employee は会社に所属する社員を表します。
 - 社員は基本スキル(種類とレベル)を保有できる。詳細は [Skill](./Skill.md) を参照。
 - `TryGetSkill(SkillType, out Skill)`で最新の登録済みスキルを取得できる。未習得・未定義種別ならfalse、出力はnullとなる。
 - 利用可能工数と消費工数は実際の勤務時間を表し、生産性倍率によって増減しない。未習得スキルを計算上0として扱う処理は生産性計算側が担当する。
+- 疲労(`Fatigue`)を`decimal`の0〜100で保持する。初期値は0。コンストラクタ末尾の`initialFatigue`で指定でき、範囲外の初期値は`ArgumentOutOfRangeException`となる。公開setterは持たない。
+- `internal CompleteWeek()`で、今週の消費勤務時間から疲労を更新した後、翌週の利用可能工数へ戻す。全タスクの進捗反映後にシミュレーションから呼ぶ。
+- `ResetWeeklyHours()`単体は勤務時間のみを復元し、疲労を変更しない。通常の週次進行には`AdvanceWeek()`を使う。
+- 疲労は基本スキルと独立しており、スキルの種類・レベルを変更しない。増減式と倍率は[Fatigue](./Fatigue.md)を参照。
