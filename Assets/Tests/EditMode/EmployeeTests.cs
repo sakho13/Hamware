@@ -5,6 +5,33 @@ using NUnit.Framework;
 public class EmployeeTests
 {
     [Test]
+    public void TryGetSkill_OwnedSkill_ReturnsLatestRegistration()
+    {
+        var employee = new Employee("社員", 40, new[] { new Skill(SkillType.Backend, 2) });
+        Assert.IsTrue(employee.TryGetSkill(SkillType.Backend, out var initial));
+        Assert.AreEqual(2, initial.Level);
+        var updated = new Skill(SkillType.Backend, 4);
+        employee.AddSkill(updated);
+
+        Assert.IsTrue(employee.TryGetSkill(SkillType.Backend, out var actual));
+        Assert.AreSame(updated, actual);
+        Assert.AreEqual(40, employee.AvailableHours);
+    }
+
+    [TestCase((int)SkillType.Testing)]
+    [TestCase(-1)]
+    [TestCase(999)]
+    public void TryGetSkill_MissingOrUndefined_ReturnsFalseWithoutChangingState(int type)
+    {
+        var employee = new Employee("社員", 40, new[] { new Skill(SkillType.Backend, 2) });
+
+        Assert.IsFalse(employee.TryGetSkill((SkillType)type, out var actual));
+        Assert.IsNull(actual);
+        Assert.AreEqual(1, employee.Skills.Count);
+        Assert.AreEqual(40, employee.AvailableHours);
+    }
+
+    [Test]
     public void Constructor_SetsNameAndWeeklyAvailableHours()
     {
         var employee = new Employee("ハム田", 40);

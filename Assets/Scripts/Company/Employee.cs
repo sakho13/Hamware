@@ -109,4 +109,12 @@ public class Employee
 
         _skills[skill.Type] = skill;
     }
+
+    /// <summary>
+    /// 指定した基本スキルを取得する。未習得・未定義種別の場合はfalseを返し、skillはnullになる。
+    /// </summary>
+    public bool TryGetSkill(SkillType type, out Skill skill)
+    {
+        return _skills.TryGetValue(type, out skill);
+    }
 }
