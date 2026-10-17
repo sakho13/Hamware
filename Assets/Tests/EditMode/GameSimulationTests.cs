@@ -182,7 +182,7 @@ public class GameSimulationTests
 
         simulation.AdvanceWeek();
 
-        Assert.AreEqual(50, login.CompletedHours);
+        Assert.AreEqual(50, login.CompletedProgressHours);
     }
 
     [Test]
@@ -250,8 +250,8 @@ public class GameSimulationTests
         simulation.AdvanceWeek();
 
         Assert.AreEqual(2, simulation.CurrentWeek);
-        Assert.AreEqual(50, login.CompletedHours);
-        Assert.AreEqual(30, csv.CompletedHours);
+        Assert.AreEqual(50, login.CompletedProgressHours);
+        Assert.AreEqual(30, csv.CompletedProgressHours);
         Assert.AreEqual(80, simulation.AvailableHours);
     }
 }

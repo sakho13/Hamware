@@ -1,8 +1,14 @@
 using System;
+using System.Linq;
 using NUnit.Framework;
 
 public class SkillTests
 {
+    private static int[] UndefinedSkillTypes => new[]
+    {
+        -1, Enum.GetValues(typeof(SkillType)).Cast<int>().Max() + 1, int.MaxValue
+    };
+
     [Test]
     public void Constructor_SetsTypeAndLevel()
     {
@@ -21,9 +27,7 @@ public class SkillTests
         Assert.AreEqual(3, skill.Level);
     }
 
-    [TestCase(-1)]
-    [TestCase(12)]
-    [TestCase(999)]
+    [TestCaseSource(nameof(UndefinedSkillTypes))]
     public void Constructor_UndefinedType_ThrowsArgumentOutOfRangeException(int type)
     {
         var exception = Assert.Throws<ArgumentOutOfRangeException>(

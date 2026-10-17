@@ -43,10 +43,10 @@ public class ProductivitySimulationTests
 
         simulation.AdvanceWeek();
 
-        Assert.AreEqual(14m, backendA.CompletedHours);
-        Assert.AreEqual(8.25m, backendB.CompletedHours);
-        Assert.AreEqual(10m, testingA.CompletedHours);
-        Assert.AreEqual(15m, testingB.CompletedHours);
+        Assert.AreEqual(14m, backendA.CompletedProgressHours);
+        Assert.AreEqual(8.25m, backendB.CompletedProgressHours);
+        Assert.AreEqual(10m, testingA.CompletedProgressHours);
+        Assert.AreEqual(15m, testingB.CompletedProgressHours);
     }
 
     [TestCase(false)]
@@ -63,7 +63,7 @@ public class ProductivitySimulationTests
             simulation.AddEmployee(employee);
             Assert.IsTrue(simulation.TryAllocateHours(employee, task, 10));
         }
-        Assert.AreEqual(0m, task.CompletedHours);
+        Assert.AreEqual(0m, task.CompletedProgressHours);
         Assert.AreEqual(30, a.AvailableHours);
         Assert.AreEqual(30, b.AvailableHours);
         Assert.AreEqual(60, simulation.AvailableHours);
@@ -71,12 +71,12 @@ public class ProductivitySimulationTests
 
         simulation.AdvanceWeek();
 
-        Assert.AreEqual(22.25m, task.CompletedHours);
+        Assert.AreEqual(22.25m, task.CompletedProgressHours);
         Assert.AreEqual(0, simulation.AllocatedHours);
         Assert.AreEqual(80, simulation.AvailableHours);
         Assert.AreEqual(2, simulation.CurrentWeek);
         simulation.AdvanceWeek();
-        Assert.AreEqual(22.25m, task.CompletedHours, "翌週に同じ割当を二重反映しない");
+        Assert.AreEqual(22.25m, task.CompletedProgressHours, "翌週に同じ割当を二重反映しない");
     }
 
     [Test]
@@ -93,40 +93,37 @@ public class ProductivitySimulationTests
 
         simulation.AdvanceWeek();
 
-        Assert.AreEqual(5m, task.CompletedHours);
+        Assert.AreEqual(5m, task.CompletedProgressHours);
         Assert.AreEqual(40, employee.AvailableHours);
         Assert.AreEqual(0, employee.Skills.Count);
     }
 
-    [Test]
-    public void AdvanceWeek_SplitHoursWithinWeekOrAcrossWeeks_PreservesFractionalProgress()
+    [TestCase(10, false, TestName = "AdvanceWeek_SingleAllocation_PreservesFractionalProgress")]
+    [TestCase(1, false, TestName = "AdvanceWeek_SplitHoursWithinWeek_PreservesFractionalProgress")]
+    [TestCase(1, true, TestName = "AdvanceWeek_SplitHoursAcrossWeeks_PreservesFractionalProgress")]
+    public void AdvanceWeek_SplitHoursWithinWeekOrAcrossWeeks_PreservesFractionalProgress(
+        int hoursPerAllocation, bool advanceAfterEachAllocation)
     {
-        var results = new List<decimal>();
-        for (var mode = 0; mode < 3; mode++)
+        var simulation = new GameSimulation();
+        var employee = EmployeeB();
+        var task = new DevelopmentTask("Backend", 100, TaskType.BackendImplementation);
+        simulation.AddEmployee(employee);
+        simulation.AddTask(task);
+        for (var hours = 0; hours < 10; hours += hoursPerAllocation)
         {
-            var simulation = new GameSimulation();
-            var employee = EmployeeB();
-            var task = new DevelopmentTask("Backend", 100, TaskType.BackendImplementation);
-            simulation.AddEmployee(employee);
-            simulation.AddTask(task);
-            if (mode == 0)
+            Assert.IsTrue(simulation.TryAllocateHours(employee, task, hoursPerAllocation));
+            if (advanceAfterEachAllocation)
             {
-                Assert.IsTrue(simulation.TryAllocateHours(employee, task, 10));
                 simulation.AdvanceWeek();
             }
-            else
-            {
-                for (var hour = 0; hour < 10; hour++)
-                {
-                    Assert.IsTrue(simulation.TryAllocateHours(employee, task, 1));
-                    if (mode == 2) simulation.AdvanceWeek();
-                }
-                if (mode == 1) simulation.AdvanceWeek();
-            }
-            results.Add(task.CompletedHours);
         }
 
-        CollectionAssert.AreEqual(new[] { 8.25m, 8.25m, 8.25m }, results);
+        if (!advanceAfterEachAllocation)
+        {
+            simulation.AdvanceWeek();
+        }
+
+        Assert.AreEqual(8.25m, task.CompletedProgressHours);
     }
 
     [Test]
@@ -142,7 +139,7 @@ public class ProductivitySimulationTests
 
         simulation.AdvanceWeek();
 
-        Assert.AreEqual(17.5m, task.CompletedHours);
+        Assert.AreEqual(17.5m, task.CompletedProgressHours);
     }
 
     [Test]
@@ -159,7 +156,7 @@ public class ProductivitySimulationTests
 
         simulation.AdvanceWeek();
 
-        Assert.AreEqual(10m, task.CompletedHours);
+        Assert.AreEqual(10m, task.CompletedProgressHours);
         Assert.IsTrue(task.IsCompleted);
         Assert.IsFalse(simulation.TryAllocateHours(employee, task, 1));
         Assert.AreEqual(40, employee.AvailableHours);
@@ -183,7 +180,7 @@ public class ProductivitySimulationTests
         Assert.AreEqual(30, employee.AvailableHours);
         Assert.AreEqual(10, simulation.AllocatedHours);
         simulation.AdvanceWeek();
-        Assert.AreEqual(8.25m, task.CompletedHours);
+        Assert.AreEqual(8.25m, task.CompletedProgressHours);
     }
 
     [Test]
@@ -199,7 +196,7 @@ public class ProductivitySimulationTests
 
         new WeekProcessor().Process(allocations);
 
-        Assert.AreEqual(5m, task.CompletedHours);
+        Assert.AreEqual(5m, task.CompletedProgressHours);
         Assert.AreEqual(30, employee.AvailableHours);
         Assert.AreEqual(1, allocations.Count);
         Assert.AreEqual(10, allocations[task][employee]);
@@ -218,7 +215,7 @@ public class ProductivitySimulationTests
 
         new WeekProcessor().Process(allocations);
 
-        Assert.AreEqual((decimal)int.MaxValue, task.CompletedHours);
+        Assert.AreEqual((decimal)int.MaxValue, task.CompletedProgressHours);
         Assert.IsTrue(task.IsCompleted);
     }
 }

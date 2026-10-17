@@ -5,6 +5,10 @@ using System;
 /// </summary>
 public sealed class ProductivityCalculator
 {
+    // 全関連スキルが未習得のときの倍率と、有効スキルレベル1あたりの増分。
+    private const decimal BaseMultiplier = 0.5m;
+    private const decimal MultiplierPerLevel = 0.25m;
+
     /// <summary>
     /// 倍率 = 0.5 + 0.25 × Σ(スキルレベル × 重み)。未習得は計算上0。
     /// 未習得の重みも維持し、端数を丸めずに返す。
@@ -37,6 +41,6 @@ public sealed class ProductivityCalculator
             }
         }
 
-        return workedHours * (0.5m + 0.25m * effectiveLevel);
+        return workedHours * (BaseMultiplier + MultiplierPerLevel * effectiveLevel);
     }
 }

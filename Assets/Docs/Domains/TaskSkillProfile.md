@@ -17,6 +17,10 @@
 | Management | Management: 100% |
 | CustomerSupport | CustomerSupport: 100% |
 
+`Communication`と`Sales`は社員の基本スキルとして保持できるが、今回の初期対応表では意図的に参照しない。対応するタスク種別の追加も今回の対象外とする。
+
+参照スキルと重みは`TaskSkillProfiles`で調整し、生産性倍率の係数は`ProductivityCalculator`の`BaseMultiplier`と`MultiplierPerLevel`で調整する。
+
 `ProductivityCalculator.CalculateProgress(Employee, TaskSkillProfile, int workedHours)`は、状態を変更せずに以下の計算結果を`decimal`で返す。
 
 ```text

@@ -101,14 +101,37 @@ public class ProductivityCalculatorTests
     }
 
     [Test]
-    public void CalculateProgress_InvalidArguments_Throws()
+    public void CalculateProgress_NullEmployee_ThrowsArgumentNullException()
+    {
+        var profile = TaskSkillProfiles.Get(TaskType.Testing);
+
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => _calculator.CalculateProgress(null, profile, 10));
+
+        Assert.AreEqual("employee", exception.ParamName);
+    }
+
+    [Test]
+    public void CalculateProgress_NullProfile_ThrowsArgumentNullException()
+    {
+        var employee = new Employee("社員", 40);
+
+        var exception = Assert.Throws<ArgumentNullException>(
+            () => _calculator.CalculateProgress(employee, null, 10));
+
+        Assert.AreEqual("profile", exception.ParamName);
+    }
+
+    [Test]
+    public void CalculateProgress_NegativeWorkHours_ThrowsArgumentOutOfRangeException()
     {
         var employee = new Employee("社員", 40);
         var profile = TaskSkillProfiles.Get(TaskType.Testing);
 
-        Assert.Throws<ArgumentNullException>(() => _calculator.CalculateProgress(null, profile, 10));
-        Assert.Throws<ArgumentNullException>(() => _calculator.CalculateProgress(employee, null, 10));
-        Assert.Throws<ArgumentOutOfRangeException>(() => _calculator.CalculateProgress(employee, profile, -1));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(
+            () => _calculator.CalculateProgress(employee, profile, -1));
+
+        Assert.AreEqual("workedHours", exception.ParamName);
     }
 
     [Test]

@@ -5,6 +5,16 @@ using NUnit.Framework;
 
 public class TaskSkillProfileTests
 {
+    private static int[] UndefinedSkillTypes => new[]
+    {
+        -1, Enum.GetValues(typeof(SkillType)).Cast<int>().Max() + 1, int.MaxValue
+    };
+
+    private static int[] UndefinedTaskTypes => new[]
+    {
+        -1, Enum.GetValues(typeof(TaskType)).Cast<int>().Max() + 1, int.MaxValue
+    };
+
     [Test]
     public void Constructor_CopiesInputAndExposesReadOnlyWeights()
     {
@@ -41,9 +51,7 @@ public class TaskSkillProfileTests
             new Dictionary<SkillType, decimal> { { SkillType.Testing, decimal.MaxValue } }));
     }
 
-    [TestCase(-1)]
-    [TestCase(12)]
-    [TestCase(999)]
+    [TestCaseSource(nameof(UndefinedSkillTypes))]
     public void Constructor_UndefinedSkill_Throws(int type)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new TaskSkillProfile(
@@ -99,9 +107,7 @@ public class TaskSkillProfileTests
         Assert.AreEqual(0.1m, weights[SkillType.Testing]);
     }
 
-    [TestCase(-1)]
-    [TestCase(10)]
-    [TestCase(999)]
+    [TestCaseSource(nameof(UndefinedTaskTypes))]
     public void Get_UndefinedTaskType_Throws(int type)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => TaskSkillProfiles.Get((TaskType)type));

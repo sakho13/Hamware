@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// タスク種別ごとの初期スキル対応表。バランス調整はここで行う。
+/// タスク種別ごとの初期スキル対応表。参照スキルと重みの調整はここで行う。
+/// 生産性倍率の係数はProductivityCalculatorで管理する。
 /// </summary>
 public static class TaskSkillProfiles
 {

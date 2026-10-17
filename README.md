@@ -19,7 +19,7 @@
 
 - `Employee`は自分の週あたり残り利用可能工数(`AvailableHours`)を自分で持ち、`TryConsumeHours` / `ResetWeeklyHours`を通じてのみ変化する
 - `Employee`は自分が保有する基本スキル(`Skill`の集合)も自分で管理する(`AddSkill`)
-- `DevelopmentTask`は自分の消化済み工数(`CompletedHours`)を自分で持つ
+- `DevelopmentTask`は自分のスキル補正後の累積進捗工数(`CompletedProgressHours`)を自分で持つ
 
 上位クラス(`GameSimulation`)は個々のオブジェクトの内部状態を直接書き換えず、各オブジェクトが公開するメソッド経由でのみ操作する。
 
@@ -55,12 +55,12 @@
 
 | クラス | 役割 |
 |---|---|
-| `DevelopmentTask` | 開発タスク。必要工数と消化済み工数を持ち、消化済み工数が必要工数に達すると完了扱いになる |
+| `DevelopmentTask` | 開発タスク。タスク種別・必要進捗工数・スキル補正後の累積進捗工数を持ち、進捗が必要量に達すると完了扱いになる。進捗の単位は時間相当で、実勤務時間とは区別する |
 | `TaskType` | タスクの種類。FrontendImplementation / BackendImplementation / Database / Infrastructure / Testing / Security / Architecture / Planning / Management / CustomerSupport |
 | `TaskSkillProfile` / `TaskSkillProfiles` | タスクが参照する基本スキルと重みの不変な定義、および種別ごとの初期対応表 |
 | `ProductivityCalculator` | 実勤務工数をスキルに応じた進捗工数へ変換する、副作用のない計算サービス |
 | `GameSimulation` | 社員・タスクの登録、工数割り当て(`TryAllocateHours`)、週送り(`AdvanceWeek`)を管理するシミュレーション全体の入口 |
-| `WeekProcessor` | 週次処理で、社員ごとの割り当て工数をタスクの消化済み工数へ反映する |
+| `WeekProcessor` | 週次処理で、社員ごとの実勤務工数を基本スキルで補正し、タスク単位で合算して進捗へ反映する |
 
 `GameSimulation.AdvanceWeek()`は、社員ごとの実勤務工数を`WeekProcessor`へ渡す。`WeekProcessor`は社員ごとにスキル補正してからタスク単位に合算し、進捗へ反映する。その後、シミュレーションがすべての割り当てをクリアして週番号を進め、各社員の利用可能工数をリセットする。
 
@@ -76,8 +76,9 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 
 - 全関連スキルが未習得なら0.5倍、Lv2なら1倍、Lv5なら1.75倍。
 - BackendImplementationはBackend 70% / Database 20% / Testing 10%。他の9種は対応する単一スキル100%。詳細は[TaskSkillProfile](Assets/Docs/Domains/TaskSkillProfile.md)を参照。
+- CommunicationとSalesは社員の基本スキルとして保持できるが、この初期対応表では参照しない。
 - `AvailableHours` / `AllocatedHours`は実勤務工数を整数で扱い、倍率の影響を受けない。
-- `CompletedHours`は補正後の進捗を`decimal`で蓄積し、週をまたいで端数を保持する。`RequiredHours`は基準となる必要進捗工数で、整数のまま。
+- `CompletedProgressHours`は補正後の進捗を`decimal`で蓄積し、週をまたいで端数を保持する。`RequiredProgressHours`は基準となる必要進捗工数で、整数のまま。
 - スキルは週送り時点の値を参照する。必要進捗を超えた分は破棄し、勤務時間を返却・再配分しない。
 
 ## テスト
