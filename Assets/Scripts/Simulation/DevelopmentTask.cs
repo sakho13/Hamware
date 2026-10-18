@@ -6,6 +6,8 @@ using System;
 /// </summary>
 public class DevelopmentTask
 {
+    /// <summary>表示名とは独立した識別子。</summary>
+    public Guid Id { get; } = Guid.NewGuid();
     /// <summary>
     /// タスク名
     /// </summary>

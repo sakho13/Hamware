@@ -32,6 +32,14 @@ public sealed class ProductivityCalculator
             throw new ArgumentOutOfRangeException(nameof(workedHours), "実勤務工数は0以上である必要があります。");
         }
 
+        return workedHours * CalculateSkillMultiplier(employee, profile)
+            * FatigueCalculator.CalculateProductivityMultiplier(employee.Fatigue);
+    }
+
+    public decimal CalculateSkillMultiplier(Employee employee, TaskSkillProfile profile)
+    {
+        if (employee == null) throw new ArgumentNullException(nameof(employee));
+        if (profile == null) throw new ArgumentNullException(nameof(profile));
         decimal effectiveLevel = 0m;
         foreach (var entry in profile.Weights)
         {
@@ -41,7 +49,6 @@ public sealed class ProductivityCalculator
             }
         }
 
-        decimal skillMultiplier = BaseMultiplier + MultiplierPerLevel * effectiveLevel;
-        return workedHours * skillMultiplier * FatigueCalculator.CalculateProductivityMultiplier(employee.Fatigue);
+        return BaseMultiplier + MultiplierPerLevel * effectiveLevel;
     }
 }

@@ -10,3 +10,5 @@ WeekProcessor はGameSimulationから呼ばれるシミュレーション内部�
 - 補正式・係数・週次順序・状態変化の反映時期は[ProductHealth](./ProductHealth.md)を参照。表示用などの明示的な桁丸めは追加しない。
 - 完了を超える進捗の上限処理はタスク自身が担当する。勤務時間の返却や他タスクへの再配分は行わない。
 - 社員の週末更新とシミュレーションの週番号管理は担当しない。
+
+`Prepare`で社員別の倍率・計算進捗・上限適用後の進捗・新規完了効果を値スナップショットにする。`PreparedWeek.Commit`で検証済み内容を一度だけ反映する。GameSimulationはその間に疲労の計算とWeekResultの作成も済ませる。内部の`Process`は単体テスト用の既存呼出しを維持し、PrepareとCommitをまとめて実行する。
