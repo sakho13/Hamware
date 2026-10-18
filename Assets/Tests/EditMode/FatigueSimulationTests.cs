@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using NUnit.Framework;
 
 public class FatigueSimulationTests
@@ -173,15 +172,26 @@ public class FatigueSimulationTests
     }
 
     [Test]
-    public void AdvanceWeek_DirectlyConsumedHours_AreIncludedWithoutAllocations()
+    public void TryAllocateHours_FullWeek_RejectsExtraWorkAndPreservesFatigueAccounting()
     {
         var simulation = new GameSimulation();
         var employee = CreateEmployee();
+        var first = CreateTask();
+        var extra = CreateTask();
         simulation.AddEmployee(employee);
-        Assert.IsTrue(employee.TryConsumeHours(40));
+        simulation.AddTask(first);
+        simulation.AddTask(extra);
+        Assert.IsTrue(simulation.TryAllocateHours(employee, first, 40));
+
+        Assert.IsFalse(simulation.TryAllocateHours(employee, extra, 40));
+        Assert.AreEqual(0, employee.AvailableHours);
+        Assert.AreEqual(40, simulation.AllocatedHours);
+        Assert.AreEqual(0m, employee.Fatigue);
 
         simulation.AdvanceWeek();
 
+        Assert.AreEqual(40m, first.CompletedProgressHours);
+        Assert.AreEqual(0m, extra.CompletedProgressHours);
         Assert.AreEqual(10m, employee.Fatigue);
         Assert.AreEqual(40, employee.AvailableHours);
     }
@@ -250,21 +260,31 @@ public class FatigueSimulationTests
     }
 
     [Test]
-    public void AdvanceWeek_DuplicateEmployeeRegistration_UpdatesEmployeeOnce()
+    public void AddEmployee_DuplicateRegistration_DoesNotIncreaseCapacityOrResetConsumedHours()
     {
         var simulation = new GameSimulation();
         var employee = CreateEmployee(50m);
         var task = CreateTask();
         simulation.AddEmployee(employee);
-        simulation.AddEmployee(employee);
         simulation.AddTask(task);
-        Assert.IsTrue(simulation.TryAllocateHours(employee, task, 40));
+        Assert.IsTrue(simulation.TryAllocateHours(employee, task, 20));
+
+        simulation.AddEmployee(employee);
+
+        Assert.AreEqual(1, simulation.Employees.Count);
+        Assert.AreEqual(40, simulation.TotalWeeklyHours);
+        Assert.AreEqual(20, simulation.AvailableHours);
+        Assert.AreEqual(20, employee.AvailableHours);
+        Assert.AreEqual(20, simulation.AllocatedHours);
+        Assert.IsTrue(simulation.TryAllocateHours(employee, task, 20));
+        Assert.IsFalse(simulation.TryAllocateHours(employee, task, 1));
 
         simulation.AdvanceWeek();
 
         Assert.AreEqual(60m, employee.Fatigue);
         Assert.AreEqual(30m, task.CompletedProgressHours);
         Assert.AreEqual(40, employee.AvailableHours);
+        Assert.AreEqual(40, simulation.AvailableHours);
     }
 
     [Test]
@@ -310,24 +330,5 @@ public class FatigueSimulationTests
         Assert.AreEqual(100m, employee.Fatigue);
         for (int week = 0; week < 4; week++) simulation.AdvanceWeek();
         Assert.AreEqual(0m, employee.Fatigue);
-    }
-
-    [Test]
-    public void Process_ProgressOnly_DoesNotUpdateFatigueOrResetConsumedHours()
-    {
-        var employee = CreateEmployee(50m);
-        var task = CreateTask();
-        Assert.IsTrue(employee.TryConsumeHours(20));
-        var allocations = new Dictionary<DevelopmentTask, Dictionary<Employee, int>>
-        {
-            { task, new Dictionary<Employee, int> { { employee, 20 } } }
-        };
-
-        new WeekProcessor().Process(allocations);
-
-        Assert.AreEqual(15m, task.CompletedProgressHours);
-        Assert.AreEqual(50m, employee.Fatigue);
-        Assert.AreEqual(20, employee.AvailableHours);
-        Assert.AreEqual(20, allocations[task][employee]);
     }
 }

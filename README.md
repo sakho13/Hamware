@@ -17,18 +17,18 @@
 
 `Employee`や`DevelopmentTask`のような各ドメインオブジェクトは、自分自身の状態を自分で管理する。
 
-- `Employee`は自分の週あたり残り利用可能工数(`AvailableHours`)を自分で持ち、`TryConsumeHours` / `ResetWeeklyHours`を通じてのみ変化する
+- `Employee`は自分の週あたり残り利用可能工数(`AvailableHours`)を持つ。公開の工数消費は`GameSimulation.TryAllocateHours`経由に限定し、内部で`TryConsumeHours`を呼ぶ。リセットは社員の週末処理内からのみ行う
 - `Employee`は自分が保有する基本スキル(`Skill`の集合)も自分で管理する(`AddSkill`)
 - `Employee`は疲労(`Fatigue`)を保持し、週末に消費勤務時間から疲労更新と勤務時間のリセットを行う(`CompleteWeek`)
 - `DevelopmentTask`は自分のスキル補正後の累積進捗工数(`CompletedProgressHours`)を自分で持つ
 
-上位クラス(`GameSimulation`)は個々のオブジェクトの内部状態を直接書き換えず、各オブジェクトが公開するメソッド経由でのみ操作する。
+上位クラス(`GameSimulation`)は個々のオブジェクトの内部状態を直接書き換えず、各オブジェクトが提供するメソッド経由でのみ操作する。シミュレーション内部用の工数消費・週末更新は外部へ公開しない。
 
 ### Try*パターン
 
 不正な操作は例外ではなくbool戻り値で表現し、失敗時は状態を変更しない。
 
-- `Employee.TryConsumeHours(hours)`
+- `Employee.TryConsumeHours(hours)`（内部用）
 - `GameSimulation.TryAllocateHours(employee, task, hours)`
 
 一方、コンストラクタでの不正な初期値(範囲外のスキルレベルなど)は`ArgumentOutOfRangeException`をスローする。
@@ -74,9 +74,8 @@
 var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 ```
 
-基本スキル倍率は`0.5 + 0.25 × Σ(関連スキルレベル × 重み)`、進捗工数は`実勤務工数 × 基本スキル倍率 × 疲労倍率`で計算する。未習得は計算上0として扱い、未習得分の重みを他のスキルへ再配分しない。`Skill`自体のレベル範囲は1〜5のまま。
+基本スキル倍率と疲労倍率を組み合わせて、実勤務工数から進捗工数を計算する。未習得は計算上0として扱い、未習得分の重みを他のスキルへ再配分しない。基本スキル倍率の式と例は[TaskSkillProfile](Assets/Docs/Domains/TaskSkillProfile.md)を参照。`Skill`自体のレベル範囲は1〜5のまま。
 
-- 全関連スキルが未習得なら0.5倍、Lv2なら1倍、Lv5なら1.75倍。
 - BackendImplementationはBackend 70% / Database 20% / Testing 10%。他の9種は対応する単一スキル100%。詳細は[TaskSkillProfile](Assets/Docs/Domains/TaskSkillProfile.md)を参照。
 - CommunicationとSalesは社員の基本スキルとして保持できるが、この初期対応表では参照しない。
 - `AvailableHours` / `AllocatedHours`は実勤務工数を整数で扱い、倍率の影響を受けない。
@@ -85,12 +84,9 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 
 ### 稼働量と疲労
 
-- 疲労は`decimal`の0〜100で、通常の初期値は0。コンストラクタの`initialFatigue`で有効範囲内の値を指定でき、範囲外は例外となる。外部から直接変更できない。
-- 週の実勤務時間は`WeeklyAvailableHours - AvailableHours`。稼働率はこれを週の利用可能工数で割った値となる。
-- 疲労増減は`40 × (稼働率 - 0.75)`。週40h勤務可能なら、10h勤務で-20、30hで変化なし、40hで+10。結果を0〜100に制限する。無割当なら-30となる。
-- 疲労倍率は`1 - 0.5 × (疲労 / 100)`。疲労0で1倍、50で0.75倍、100で0.5倍。基本スキルの値そのものは変えない。
-- 今週の進捗には更新前の疲労を使い、今週の稼働による疲労変化は翌週から効く。全タスクを処理した後、同じ社員を一度だけ更新する。無割当の社員も回復する。
-- 詳細と調整用定数は[Fatigue](Assets/Docs/Domains/Fatigue.md)を参照。UI、残業、休暇、スキル成長は対象外。
+- 社員は勤務の稼働率に応じて疲労が蓄積・回復し、疲労が高いほど進捗が下がる。基本スキル自体の値は変えない。
+- 全タスクの進捗反映後に疲労を更新し、当週の負荷は翌週から効く。無割当の社員も回復する。
+- 疲労の値域・増減式・数値例・精度と調整方法は[Fatigue](Assets/Docs/Domains/Fatigue.md)を参照。UI、残業、休暇、スキル成長は対象外。
 
 ## テスト
 
@@ -105,5 +101,8 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 - `ProductivitySimulationTests.cs`
 - `FatigueCalculatorTests.cs`
 - `FatigueSimulationTests.cs`
+- `WeekProcessorTests.cs`
+
+社員の内部操作の単体テストは、`InternalsVisibleTo`でテストアセンブリにアクセスを許可している。公開APIでは社員の勤務時間を直接消費・リセットできない。
 
 Unity Test Runner経由で実行し、`TestResults.xml`の内容を正として合否を判断する(コンソールログのポーリングには依存しない)。

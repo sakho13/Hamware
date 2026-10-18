@@ -19,14 +19,14 @@ public class Employee
     public string Name { get; }
 
     /// <summary>
-    /// 1週間あたりの利用可能工数(時間)
+    /// 1週間に割り当てられる勤務工数の上限(時間)
     /// </summary>
     public int WeeklyAvailableHours { get; }
 
     /// <summary>
     /// 今週まだ割り当てられていない残り利用可能工数(時間)。
     /// コンストラクタでWeeklyAvailableHoursへ初期化され、
-    /// TryConsumeHoursで減少し、ResetWeeklyHoursでWeeklyAvailableHoursへ戻る。
+    /// 割当時に内部で消費され、週末のCompleteWeekでWeeklyAvailableHoursへ戻る。
     /// </summary>
     public int AvailableHours { get; private set; }
 
@@ -85,7 +85,7 @@ public class Employee
     /// 0以下の工数、または残り利用可能工数を超える消費は拒否しfalseを返す。
     /// 成功した場合のみAvailableHoursを減少させる。
     /// </summary>
-    public bool TryConsumeHours(int hours)
+    internal bool TryConsumeHours(int hours)
     {
         if (hours <= 0 || hours > AvailableHours)
         {
@@ -98,9 +98,9 @@ public class Employee
 
     /// <summary>
     /// 残り利用可能工数をWeeklyAvailableHoursへリセットする。
-    /// 疲労は変更しない。週次処理では疲労更新を含むCompleteWeekを使用する。
+    /// 疲労更新後にCompleteWeekからのみ呼び出す。
     /// </summary>
-    public void ResetWeeklyHours()
+    private void ResetWeeklyHours()
     {
         AvailableHours = WeeklyAvailableHours;
     }

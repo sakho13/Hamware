@@ -13,7 +13,7 @@ public static class FatigueCalculator
     private const decimal MinProductivityMultiplier = 0.5m;
 
     /// <summary>
-    /// 疲労増減 = 40 × (実勤務工数 / 週の利用可能工数 - 0.75)。結果を0〜100に制限する。
+    /// 週の稼働率から翌週の疲労を計算し、有効範囲内に制限する。
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">
     /// currentFatigueが0〜100の範囲外、weeklyAvailableHoursが0以下、
@@ -39,7 +39,7 @@ public static class FatigueCalculator
     }
 
     /// <summary>
-    /// 疲労0で1倍、疲労100で0.5倍となる線形の生産性倍率を返す。
+    /// 疲労の有効範囲に応じた線形の生産性倍率を返す。
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">fatigueが0〜100の範囲外の場合</exception>
     public static decimal CalculateProductivityMultiplier(decimal fatigue)

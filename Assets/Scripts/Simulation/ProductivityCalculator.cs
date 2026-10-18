@@ -11,7 +11,7 @@ public sealed class ProductivityCalculator
 
     /// <summary>
     /// スキル倍率 = 0.5 + 0.25 × Σ(スキルレベル × 重み)。未習得は計算上0。
-    /// 実勤務工数へスキル倍率と疲労倍率を乗算する。未習得の重みも維持し、端数を丸めずに返す。
+    /// 実勤務工数へスキル倍率と疲労倍率を乗算する。未習得の重みも維持し、decimal精度で返す。
     /// </summary>
     /// <exception cref="ArgumentNullException">employeeまたはprofileがnullの場合</exception>
     /// <exception cref="ArgumentOutOfRangeException">workedHoursが負の場合</exception>

@@ -54,7 +54,7 @@ public class DevelopmentTask
     }
 
     /// <summary>
-    /// 補正後の進捗工数を反映する。端数は丸めずに蓄積する。
+    /// 補正後の進捗工数を反映する。端数はdecimalの精度で蓄積する。
     /// 0以下の進捗工数は無視する。
     /// 完了済みタスクへ過剰な進捗を適用しても、累積進捗工数はRequiredProgressHoursを超えない。
     /// </summary>

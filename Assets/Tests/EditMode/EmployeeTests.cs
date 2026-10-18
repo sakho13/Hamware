@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 
 public class EmployeeTests
@@ -53,15 +54,36 @@ public class EmployeeTests
     }
 
     [Test]
-    public void Constructor_FractionalInitialFatigue_IsPreservedAndRangeValidated()
+    public void Constructor_FractionalInitialFatigue_IsPreserved()
     {
         Assert.AreEqual(2.5m, new Employee("社員", 40, initialFatigue: 2.5m).Fatigue);
-        var below = Assert.Throws<ArgumentOutOfRangeException>(
+    }
+
+    [Test]
+    public void Constructor_InitialFatigueBelowMinimum_Throws()
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(
             () => new Employee("社員", 40, initialFatigue: -0.01m));
-        var above = Assert.Throws<ArgumentOutOfRangeException>(
+
+        Assert.AreEqual("initialFatigue", exception.ParamName);
+    }
+
+    [Test]
+    public void Constructor_InitialFatigueAboveMaximum_Throws()
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(
             () => new Employee("社員", 40, initialFatigue: 100.01m));
-        Assert.AreEqual("initialFatigue", below.ParamName);
-        Assert.AreEqual("initialFatigue", above.ParamName);
+
+        Assert.AreEqual("initialFatigue", exception.ParamName);
+    }
+
+    [TestCase("ResetWeeklyHours")]
+    [TestCase("TryConsumeHours")]
+    [TestCase("CompleteWeek")]
+    public void WeeklyHoursMutation_IsNotExposedAsPublicApi(string methodName)
+    {
+        Assert.IsNull(typeof(Employee).GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public),
+            "勤務時間の変更はシミュレーション内部からのみ行う");
     }
 
     [Test]
@@ -128,15 +150,15 @@ public class EmployeeTests
     }
 
     [Test]
-    public void ResetWeeklyHours_RestoresAvailableHoursToWeeklyAvailableHours()
+    public void CompleteWeek_UpdatesFatigueBeforeRestoringAvailableHours()
     {
         var employee = new Employee("ハム田", 40, initialFatigue: 50m);
-        employee.TryConsumeHours(30);
+        employee.TryConsumeHours(40);
 
-        employee.ResetWeeklyHours();
+        employee.CompleteWeek();
 
         Assert.AreEqual(40, employee.AvailableHours);
-        Assert.AreEqual(50m, employee.Fatigue);
+        Assert.AreEqual(60m, employee.Fatigue);
     }
 
     [Test]

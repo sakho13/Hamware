@@ -59,11 +59,11 @@ public class GameSimulation
     }
 
     /// <summary>
-    /// 社員を登録する。
+    /// 社員を登録する。nullまたは登録済みの同一社員は無視する。
     /// </summary>
     public void AddEmployee(Employee employee)
     {
-        if (employee == null)
+        if (employee == null || _employees.Contains(employee))
         {
             return;
         }
@@ -128,7 +128,7 @@ public class GameSimulation
     {
         _weekProcessor.Process(_allocations);
 
-        foreach (var employee in _employees.Distinct())
+        foreach (var employee in _employees)
         {
             employee.CompleteWeek();
         }

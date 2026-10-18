@@ -13,15 +13,13 @@ public class FatigueCalculatorTests
         Assert.AreEqual((decimal)expected, FatigueCalculator.CalculateNextFatigue(50m, workedHours, 40));
     }
 
-    [TestCase(0, 0)]
-    [TestCase(5, 0)]
-    [TestCase(90, 100)]
-    [TestCase(99, 100)]
-    [TestCase(100, 100)]
-    public void CalculateNextFatigue_AtBounds_ClampsResult(int fatigue, int expected)
+    [TestCase(0, 0, 0)]
+    [TestCase(5, 0, 0)]
+    [TestCase(90, 40, 100)]
+    [TestCase(99, 40, 100)]
+    [TestCase(100, 40, 100)]
+    public void CalculateNextFatigue_AtBounds_ClampsResult(int fatigue, int workedHours, int expected)
     {
-        int workedHours = fatigue < 50 ? 0 : 40;
-
         Assert.AreEqual((decimal)expected, FatigueCalculator.CalculateNextFatigue(fatigue, workedHours, 40));
     }
 
