@@ -2,6 +2,7 @@ using NUnit.Framework;
 
 public class ProductivitySimulationTests
 {
+    // スキル補正と端数保持を独立検証するため、各シミュレーションは初期負債0で生成する。
     private static Employee EmployeeA()
     {
         return new Employee("社員A", 40, new[]
@@ -25,7 +26,7 @@ public class ProductivitySimulationTests
     [Test]
     public void AdvanceWeek_IssueExample_ChangesBestEmployeeByTaskType()
     {
-        var simulation = new GameSimulation();
+        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
         var a = EmployeeA();
         var b = EmployeeB();
         simulation.AddEmployee(a);
@@ -52,7 +53,7 @@ public class ProductivitySimulationTests
     [TestCase(true)]
     public void AdvanceWeek_MultipleEmployees_SumsAdjustedProgressRegardlessOfOrder(bool reverse)
     {
-        var simulation = new GameSimulation();
+        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
         var a = EmployeeA();
         var b = EmployeeB();
         var task = new DevelopmentTask("Backend", 100, TaskType.BackendImplementation);
@@ -81,7 +82,7 @@ public class ProductivitySimulationTests
     [Test]
     public void AdvanceWeek_UnskilledEmployee_HalvesProgressButConsumesActualHours()
     {
-        var simulation = new GameSimulation();
+        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
         var employee = new Employee("未習得", 40);
         var task = new DevelopmentTask("Backend", 100, TaskType.BackendImplementation);
         simulation.AddEmployee(employee);
@@ -103,7 +104,7 @@ public class ProductivitySimulationTests
     public void AdvanceWeek_SplitHoursWithinWeekOrAcrossWeeks_PreservesFractionalProgress(
         int hoursPerAllocation, bool advanceAfterEachAllocation)
     {
-        var simulation = new GameSimulation();
+        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
         var employee = EmployeeB();
         var task = new DevelopmentTask("Backend", 100, TaskType.BackendImplementation);
         simulation.AddEmployee(employee);
@@ -128,7 +129,7 @@ public class ProductivitySimulationTests
     [Test]
     public void AdvanceWeek_SkillsUpdatedAfterAllocation_UsesLevelsAtWeekEnd()
     {
-        var simulation = new GameSimulation();
+        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
         var employee = new Employee("社員", 40, new[] { new Skill(SkillType.Testing, 1) });
         var task = new DevelopmentTask("Testing", 100, TaskType.Testing);
         simulation.AddEmployee(employee);
@@ -144,7 +145,7 @@ public class ProductivitySimulationTests
     [Test]
     public void AdvanceWeek_ProgressExceedsRequirement_CompletesAndRejectsFurtherAllocation()
     {
-        var simulation = new GameSimulation();
+        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
         var employee = EmployeeA();
         var task = new DevelopmentTask("Backend", 10, TaskType.BackendImplementation);
         simulation.AddEmployee(employee);
@@ -165,7 +166,7 @@ public class ProductivitySimulationTests
     [Test]
     public void TryAllocateHours_RejectedExtraAllocation_PreservesExistingAllocation()
     {
-        var simulation = new GameSimulation();
+        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
         var employee = EmployeeB();
         var task = new DevelopmentTask("Backend", 100, TaskType.BackendImplementation);
         simulation.AddEmployee(employee);

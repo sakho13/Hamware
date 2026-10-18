@@ -20,7 +20,8 @@
 - `Employee`は自分の週あたり残り利用可能工数(`AvailableHours`)を持つ。公開の工数消費は`GameSimulation.TryAllocateHours`経由に限定し、内部で`TryConsumeHours`を呼ぶ。リセットは社員の週末処理内からのみ行う
 - `Employee`は自分が保有する基本スキル(`Skill`の集合)も自分で管理する(`AddSkill`)
 - `Employee`は疲労(`Fatigue`)を保持し、週末に消費勤務時間から疲労更新と勤務時間のリセットを行う(`CompleteWeek`)
-- `DevelopmentTask`は自分のスキル補正後の累積進捗工数(`CompletedProgressHours`)を自分で持つ
+- `DevelopmentTask`は自分の補正後の累積進捗工数(`CompletedProgressHours`)を自分で持つ
+- `ProductState`は技術的負債・品質を保持し、週次の完了効果を有効範囲内で反映する
 
 上位クラス(`GameSimulation`)は個々のオブジェクトの内部状態を直接書き換えず、各オブジェクトが提供するメソッド経由でのみ操作する。シミュレーション内部用の工数消費・週末更新は外部へ公開しない。
 
@@ -36,6 +37,7 @@
 ### フォルダ構成
 
 - `Assets/Scripts/Company/` : 社員・組織に関するドメインモデル(`Employee`, `Skill`, `SkillType`)
+- `Assets/Scripts/Product/` : プロダクトの状態と負債倍率(`ProductState`, `ProductHealthCalculator`)
 - `Assets/Scripts/Simulation/` : シミュレーション進行に関するドメインモデル(`DevelopmentTask`, `WeekProcessor`, `GameSimulation`)
 
 `Employee`が`Simulation/`ではなく`Company/`に置かれているのは意図的な構造判断で、「誰が」を表す概念と「何を進めるか」を表す概念を分離している。
@@ -61,10 +63,18 @@
 | `TaskType` | タスクの種類。FrontendImplementation / BackendImplementation / Database / Infrastructure / Testing / Security / Architecture / Planning / Management / CustomerSupport |
 | `TaskSkillProfile` / `TaskSkillProfiles` | タスクが参照する基本スキルと重みの不変な定義、および種別ごとの初期対応表 |
 | `ProductivityCalculator` | 実勤務工数をスキルと疲労に応じた進捗工数へ変換する、副作用のない計算サービス |
-| `GameSimulation` | 社員・タスクの登録、工数割り当て(`TryAllocateHours`)、週送り(`AdvanceWeek`)を管理するシミュレーション全体の入口 |
-| `WeekProcessor` | 週次処理で、社員ごとの実勤務工数を基本スキルと更新前の疲労で補正し、タスク単位で合算して進捗へ反映する |
+| `TaskProductProfile` / `TaskProductProfiles` | タスク種別ごとの完了効果と、負債による進捗低下の対象を表す不変な定義と対応表 |
+| `GameSimulation` | 自身のプロダクトを所有し、社員・タスクの登録、工数割り当て(`TryAllocateHours`)、週送り(`AdvanceWeek`)を管理する入口 |
+| `WeekProcessor` | スキル・疲労・開始時の負債で進捗を補正し、新規完了によるプロダクトの変化を合算して反映する |
 
-`GameSimulation.AdvanceWeek()`は、社員ごとの実勤務工数を`WeekProcessor`へ渡す。`WeekProcessor`は社員ごとにスキルと更新前の疲労で補正してからタスク単位に合算し、進捗へ反映する。その後、各社員が消費勤務時間から翌週の疲労を更新し、利用可能工数をリセットする。最後にシミュレーションがすべての割り当てをクリアして週番号を進める。
+`GameSimulation.AdvanceWeek()`は、社員ごとの実勤務工数とプロダクトを`WeekProcessor`へ渡す。プロセッサーはスキル・更新前の疲労・開始時の負債で進捗を補正し、全タスク処理後に完了効果を合算反映する。その後、各社員が消費勤務時間から翌週の疲労を更新し、利用可能工数をリセットする。最後に割り当てをクリアして週番号を進める。
+
+### Product
+
+| クラス | 役割 |
+|---|---|
+| `ProductState` | プロダクト全体の技術的負債と品質を保持し、初期値検証・増減時の上下限制御を行う |
+| `ProductHealthCalculator` | 技術的負債から進捗倍率を返す、副作用のない計算クラス |
 
 ### 基本スキルによる生産性
 
@@ -88,6 +98,12 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 - 全タスクの進捗反映後に疲労を更新し、当週の負荷は翌週から効く。無割当の社員も回復する。
 - 疲労の値域・増減式・数値例・精度と調整方法は[Fatigue](Assets/Docs/Domains/Fatigue.md)を参照。UI、残業、休暇、スキル成長は対象外。
 
+### 技術的負債と品質
+
+- プロダクトは負債・品質を継続保持する。機能開発を続けると後続の開発効率が下がり、TestingやArchitectureへ投資すると健全性が改善する。
+- タスク完了時の効果は一度だけ合算反映し、更新後の負債は翌週から進捗へ効く。スキル・疲労とは独立した補正とし、実勤務時間を変えない。
+- 値域・初期値・係数表・計算式・週次順序・対象外は[ProductHealth](Assets/Docs/Domains/ProductHealth.md)を参照。
+
 ## テスト
 
 `Assets/Tests/EditMode/`配下にNUnitベースのEditModeテストを配置している。
@@ -102,6 +118,10 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 - `FatigueCalculatorTests.cs`
 - `FatigueSimulationTests.cs`
 - `WeekProcessorTests.cs`
+- `ProductStateTests.cs`
+- `ProductHealthCalculatorTests.cs`
+- `TaskProductProfileTests.cs`
+- `ProductHealthSimulationTests.cs`
 
 社員の内部操作の単体テストは、`InternalsVisibleTo`でテストアセンブリにアクセスを許可している。公開APIでは社員の勤務時間を直接消費・リセットできない。
 

@@ -14,7 +14,7 @@ public class WeekProcessorTests
             { task, new Dictionary<Employee, int> { { employee, 20 } } }
         };
 
-        new WeekProcessor().Process(allocations);
+        new WeekProcessor().Process(allocations, new ProductState(0m));
 
         Assert.AreEqual(15m, task.CompletedProgressHours);
         Assert.AreEqual(50m, employee.Fatigue);
@@ -38,7 +38,7 @@ public class WeekProcessorTests
             { task, new Dictionary<Employee, int> { { employee, 10 } } }
         };
 
-        new WeekProcessor().Process(allocations);
+        new WeekProcessor().Process(allocations, new ProductState(0m));
 
         Assert.AreEqual(5m, task.CompletedProgressHours);
         Assert.AreEqual(30, employee.AvailableHours);
@@ -57,7 +57,7 @@ public class WeekProcessorTests
             { task, new Dictionary<Employee, int> { { a, int.MaxValue }, { b, int.MaxValue } } }
         };
 
-        new WeekProcessor().Process(allocations);
+        new WeekProcessor().Process(allocations, new ProductState(0m));
 
         Assert.AreEqual((decimal)int.MaxValue, task.CompletedProgressHours);
         Assert.IsTrue(task.IsCompleted);
