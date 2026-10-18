@@ -1,151 +1,142 @@
 using System.Collections.Generic;
 using System.Linq;
 
-/// <summary>
-/// ゲーム全体のシミュレーション状態を保持するオーケストレーター。
-/// 週・プロダクト・登録タスク・登録社員・当週の社員ごとの割当状態を管理し、
-/// AdvanceWeek() で週次処理をまとめて実行する。
-/// </summary>
+/// <summary>登録・週内の計画・週次の確定を管理する入口。計算と状態更新は各ドメインへ委譲する。</summary>
 public class GameSimulation
 {
     private readonly List<DevelopmentTask> _tasks = new List<DevelopmentTask>();
     private readonly List<Employee> _employees = new List<Employee>();
+    private readonly List<WeekResult> _history = new List<WeekResult>();
     private readonly Dictionary<DevelopmentTask, Dictionary<Employee, int>> _allocations =
         new Dictionary<DevelopmentTask, Dictionary<Employee, int>>();
     private readonly WeekProcessor _weekProcessor = new WeekProcessor();
 
-    /// <summary>
-    /// このシミュレーションが所有するプロダクト状態。外部から差し替え・任意更新はできない。
-    /// </summary>
     public ProductState Product { get; }
+    public int CurrentWeek { get; private set; } = 1;
+    public int AvailableHours => _employees.Sum(e => e.AvailableHours);
+    public int AllocatedHours => _allocations.Values.SelectMany(d => d.Values).Sum();
+    public int TotalWeeklyHours => _employees.Sum(e => e.WeeklyAvailableHours);
+    public IReadOnlyList<DevelopmentTask> Tasks { get; }
+    public IReadOnlyList<Employee> Employees { get; }
+    public IReadOnlyList<WeekResult> History { get; }
+    public WeekResult LastWeekResult => _history.Count == 0 ? null : _history[_history.Count - 1];
 
-    /// <exception cref="System.ArgumentOutOfRangeException">初期負債または初期品質が0〜100の範囲外の場合</exception>
     public GameSimulation(decimal initialTechnicalDebt = ProductState.DefaultTechnicalDebt,
         decimal initialQuality = ProductState.DefaultQuality)
     {
         Product = new ProductState(initialTechnicalDebt, initialQuality);
+        Tasks = _tasks.AsReadOnly();
+        Employees = _employees.AsReadOnly();
+        History = _history.AsReadOnly();
     }
 
-    /// <summary>
-    /// 現在の週 ゲームの基本単位
-    /// </summary>
-    public int CurrentWeek { get; private set; } = 1;
-
-    /// <summary>
-    /// 在籍社員のAvailableHoursの合計。
-    /// 各社員のAvailableHoursから都度計算される。
-    /// </summary>
-    public int AvailableHours => _employees.Sum(e => e.AvailableHours);
-
-    /// <summary>
-    /// 今週、既にタスクへ割り当て済みの実勤務工数の合計(補正後の進捗ではない)
-    /// </summary>
-    public int AllocatedHours => _allocations.Values.SelectMany(d => d.Values).Sum();
-
-    /// <summary>
-    /// 登録されている開発タスク一覧
-    /// </summary>
-    public IReadOnlyList<DevelopmentTask> Tasks => _tasks;
-
-    /// <summary>
-    /// 登録されている社員一覧
-    /// </summary>
-    public IReadOnlyList<Employee> Employees => _employees;
-
-    /// <summary>
-    /// 在籍社員のWeeklyAvailableHoursの合計。
-    /// </summary>
-    public int TotalWeeklyHours => _employees.Sum(e => e.WeeklyAvailableHours);
-
-    /// <summary>
-    /// 開発タスクを登録する。
-    /// </summary>
     public void AddTask(DevelopmentTask task)
     {
-        if (task == null)
-        {
-            return;
-        }
-
-        _tasks.Add(task);
+        if (task != null && !_tasks.Contains(task)) _tasks.Add(task);
     }
 
-    /// <summary>
-    /// 社員を登録する。nullまたは登録済みの同一社員は無視する。
-    /// </summary>
     public void AddEmployee(Employee employee)
     {
-        if (employee == null || _employees.Contains(employee))
-        {
-            return;
-        }
-
-        _employees.Add(employee);
+        if (employee != null && !_employees.Contains(employee)) _employees.Add(employee);
     }
 
-    /// <summary>
-    /// 指定した社員から指定したタスクへ工数を割り当てる。
-    /// 以下のいずれかに該当する場合は割当を拒否しfalseを返す:
-    /// - employeeまたはtaskがnull
-    /// - hoursが0以下
-    /// - employeeが未登録
-    /// - taskが未登録
-    /// - taskが完了済み
-    /// - hoursがemployeeの残り利用可能工数を超える
-    /// 割当に成功すると、employeeのAvailableHoursがhours分減少する。
-    /// 同一社員から同一タスクへ複数回呼び出した場合は加算される。
-    /// </summary>
-    public bool TryAllocateHours(Employee employee, DevelopmentTask task, int hours)
+    /// <summary>取得時点の割当のコピー。後の編集・週送りでも変わらない。</summary>
+    public IReadOnlyList<AllocationSnapshot> GetAllocations()
     {
-        if (employee == null || task == null || hours <= 0)
+        var result = new List<AllocationSnapshot>();
+        foreach (var task in _tasks)
         {
+            if (!_allocations.TryGetValue(task, out var hours)) continue;
+            foreach (var employee in _employees)
+                if (hours.TryGetValue(employee, out var value))
+                    result.Add(new AllocationSnapshot(employee, task, value));
+        }
+        return result.AsReadOnly();
+    }
+
+    public int GetAllocatedHours(Employee employee, DevelopmentTask task)
+    {
+        return employee != null && task != null &&
+            _allocations.TryGetValue(task, out var employees) && employees.TryGetValue(employee, out var hours)
+            ? hours : 0;
+    }
+
+    /// <summary>既存API。実勤務を加算する。0以下の追加は拒否する。</summary>
+    public bool TryAllocateHours(Employee employee, DevelopmentTask task, int hours)
+        => TryAllocateHours(employee, task, hours, out _);
+
+    public bool TryAllocateHours(Employee employee, DevelopmentTask task, int hours, out AllocationFailure failure)
+    {
+        failure = ValidateTarget(employee, task, hours);
+        if (failure == AllocationFailure.None && hours == 0) failure = AllocationFailure.InvalidHours;
+        if (failure != AllocationFailure.None) return false;
+        if (hours > employee.AvailableHours)
+        {
+            failure = AllocationFailure.InsufficientHours;
             return false;
         }
+        return TrySetAllocatedHours(employee, task, GetAllocatedHours(employee, task) + hours, out failure);
+    }
 
-        if (!_employees.Contains(employee) || !_tasks.Contains(task))
+    public bool TrySetAllocatedHours(Employee employee, DevelopmentTask task, int hours)
+        => TrySetAllocatedHours(employee, task, hours, out _);
+
+    /// <summary>当週の割当を指定量へ変更する。0は取消。検証失敗では何も変更しない。</summary>
+    public bool TrySetAllocatedHours(Employee employee, DevelopmentTask task, int hours, out AllocationFailure failure)
+    {
+        failure = ValidateTarget(employee, task, hours);
+        if (failure != AllocationFailure.None) return false;
+        int previous = GetAllocatedHours(employee, task);
+        int delta = hours - previous;
+        if (delta > employee.AvailableHours)
         {
+            failure = AllocationFailure.InsufficientHours;
             return false;
         }
+        if (delta == 0) return true;
+        if (delta > 0) employee.TryConsumeHours(delta);
+        else employee.ReturnAllocatedHours(-delta);
 
-        if (task.IsCompleted)
+        if (hours == 0)
         {
-            return false;
+            _allocations[task].Remove(employee);
+            if (_allocations[task].Count == 0) _allocations.Remove(task);
         }
-
-        if (!employee.TryConsumeHours(hours))
+        else
         {
-            return false;
+            if (!_allocations.TryGetValue(task, out var perEmployee))
+            {
+                perEmployee = new Dictionary<Employee, int>();
+                _allocations.Add(task, perEmployee);
+            }
+            perEmployee[employee] = hours;
         }
-
-        if (!_allocations.TryGetValue(task, out var perEmployee))
-        {
-            perEmployee = new Dictionary<Employee, int>();
-            _allocations[task] = perEmployee;
-        }
-
-        perEmployee.TryGetValue(employee, out var current);
-        perEmployee[employee] = current + hours;
-
         return true;
     }
 
-    /// <summary>
-    /// 週を進める。
-    /// 1. スキル・更新前の疲労・開始時の負債で全タスクの進捗を補正し、新規完了効果を合算反映する
-    /// 2. 各社員の疲労を今週の消費勤務時間で更新し、翌週の利用可能工数を復元する
-    /// 3. 割当状態をクリアする(翌週へ持ち越さない)
-    /// 4. 週番号を1進める。更新した負債・疲労は翌週の進捗から効く
-    /// </summary>
-    public void AdvanceWeek()
+    private AllocationFailure ValidateTarget(Employee employee, DevelopmentTask task, int hours)
     {
-        _weekProcessor.Process(_allocations, Product);
+        if (employee == null) return AllocationFailure.MissingEmployee;
+        if (task == null) return AllocationFailure.MissingTask;
+        if (hours < 0) return AllocationFailure.InvalidHours;
+        if (!_employees.Contains(employee)) return AllocationFailure.UnregisteredEmployee;
+        if (!_tasks.Contains(task)) return AllocationFailure.UnregisteredTask;
+        if (task.IsCompleted) return AllocationFailure.CompletedTask;
+        return AllocationFailure.None;
+    }
 
-        foreach (var employee in _employees)
-        {
-            employee.CompleteWeek();
-        }
-
+    /// <summary>全計算と結果作成に成功してから確定。現在週には更新前の条件を使う。</summary>
+    public WeekResult AdvanceWeek()
+    {
+        int nextWeek = checked(CurrentWeek + 1);
+        var prepared = _weekProcessor.Prepare(_allocations, Product);
+        var employees = _employees.Select(e => new EmployeeWeekResult(e)).ToList();
+        var result = new WeekResult(CurrentWeek, employees, prepared.TaskResults, prepared.ProductResult);
+        prepared.Commit();
+        foreach (var employee in _employees) employee.CompleteWeek();
         _allocations.Clear();
-        CurrentWeek++;
+        CurrentWeek = nextWeek;
+        _history.Add(result);
+        return result;
     }
 }

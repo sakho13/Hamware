@@ -11,6 +11,8 @@ using System.Collections.Generic;
 /// </summary>
 public class Employee
 {
+    /// <summary>名前と独立した、生存期間中変わらない識別子。</summary>
+    public Guid Id { get; } = Guid.NewGuid();
     private readonly Dictionary<SkillType, Skill> _skills = new Dictionary<SkillType, Skill>();
 
     /// <summary>
@@ -97,9 +99,16 @@ public class Employee
     }
 
     /// <summary>
-    /// 残り利用可能工数をWeeklyAvailableHoursへリセットする。
-    /// 疲労更新後にCompleteWeekからのみ呼び出す。
+    /// 当週の割当を減らした分だけ返却する。進捗や疲労は変更しない。
     /// </summary>
+    internal void ReturnAllocatedHours(int hours)
+    {
+        if (hours < 0 || hours > WeeklyAvailableHours - AvailableHours)
+            throw new ArgumentOutOfRangeException(nameof(hours));
+        AvailableHours += hours;
+    }
+
+    /// <summary>疲労更新後にCompleteWeekからのみ週の工数を復元する。</summary>
     private void ResetWeeklyHours()
     {
         AvailableHours = WeeklyAvailableHours;

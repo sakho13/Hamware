@@ -31,7 +31,7 @@ public sealed class ProductState
         Quality = ApplyClampedChange(Quality, qualityChange);
     }
 
-    private static decimal ApplyClampedChange(decimal current, decimal change)
+    internal static decimal ApplyClampedChange(decimal current, decimal change)
     {
         // 加算前に増減量を制限し、decimalの最大・最小値でも加算をオーバーフローさせない。
         return current + Math.Max(MinValue - current, Math.Min(change, MaxValue - current));
