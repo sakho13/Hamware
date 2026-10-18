@@ -144,21 +144,15 @@ public class ProductHealthSimulationTests
         Assert.AreEqual(69m, simulation.Product.Quality);
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void AdvanceWeek_ExternallyCompletedTask_DoesNotApplyRetroactiveEffect(bool completeAfterAllocation)
+    [Test]
+    public void PublicApi_DoesNotExposeTaskProgressMutationOrWeekProcessor()
     {
-        var simulation = new GameSimulation();
-        var task = new DevelopmentTask("事前完了", 10, TaskType.FrontendImplementation);
-        var employee = CreateEmployee();
-        simulation.AddEmployee(employee);
-        if (completeAfterAllocation) Allocate(simulation, employee, task, 10);
-        task.ApplyProgress(10m);
-        simulation.AddTask(task);
-        Assert.IsFalse(simulation.TryAllocateHours(employee, task, 1));
-        simulation.AdvanceWeek();
-        Assert.AreEqual(10m, simulation.Product.TechnicalDebt);
-        Assert.AreEqual(70m, simulation.Product.Quality);
+        Assert.IsNull(typeof(DevelopmentTask).GetMethod(nameof(DevelopmentTask.ApplyProgress)));
+        var internalMethod = typeof(DevelopmentTask).GetMethod(nameof(DevelopmentTask.ApplyProgress),
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.IsNotNull(internalMethod);
+        Assert.IsTrue(internalMethod.IsAssembly);
+        Assert.IsFalse(typeof(WeekProcessor).IsVisible);
     }
 
     [Test]

@@ -2,7 +2,7 @@ using NUnit.Framework;
 
 public class GameSimulationTests
 {
-    // 従来の工数配分テストは初期負債0、関連スキルLv2で開始時の進捗倍率を1に揃える。
+    // 工数配分を独立検証する社員は、関連スキルLv2でスキル倍率を1に揃える。
     private static Employee CreateEmployee(string name, int hours)
     {
         return new Employee(name, hours, new[]
@@ -13,10 +13,16 @@ public class GameSimulationTests
         });
     }
 
+    // 進捗の数値を検証するテストだけ、初期負債0としてプロダクト補正を中立にする。
+    private static GameSimulation CreateNeutralSimulation()
+    {
+        return new GameSimulation(initialTechnicalDebt: 0m);
+    }
+
     [Test]
     public void AdvanceWeek_IncreasesCurrentWeek()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
 
         simulation.AdvanceWeek();
 
@@ -26,7 +32,7 @@ public class GameSimulationTests
     [Test]
     public void AddEmployee_MultipleEmployees_AreAllRegistered()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         var hamkawa = CreateEmployee("ハム川", 40);
 
@@ -41,7 +47,7 @@ public class GameSimulationTests
     [Test]
     public void AddEmployee_SameNameDifferentInstances_RegistersBoth()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var first = CreateEmployee("同名の社員", 20);
         var second = CreateEmployee("同名の社員", 40);
 
@@ -58,7 +64,7 @@ public class GameSimulationTests
     [Test]
     public void AddEmployee_SameInstanceTwice_DoesNotDoubleTeamHours()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var employee = CreateEmployee("社員", 40);
 
         simulation.AddEmployee(employee);
@@ -72,7 +78,7 @@ public class GameSimulationTests
     [Test]
     public void AddEmployee_ReflectsWeeklyTotalIntoAvailableHours()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
 
         simulation.AddEmployee(CreateEmployee("ハム田", 40));
         simulation.AddEmployee(CreateEmployee("ハム川", 40));
@@ -84,7 +90,7 @@ public class GameSimulationTests
     [Test]
     public void TryAllocateHours_SingleEmployeeMultipleTasks_Succeeds()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
         var login = new DevelopmentTask("ログイン機能", 30, TaskType.BackendImplementation);
@@ -104,7 +110,7 @@ public class GameSimulationTests
     [Test]
     public void TryAllocateHours_MultipleEmployeesSameTask_Succeeds()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
@@ -123,7 +129,7 @@ public class GameSimulationTests
     [Test]
     public void TryAllocateHours_ExceedsEmployeeWeeklyHours_ReturnsFalse()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
         var task = new DevelopmentTask("CSV出力", 100, TaskType.BackendImplementation);
@@ -139,7 +145,7 @@ public class GameSimulationTests
     [Test]
     public void TryAllocateHours_ZeroOrNegativeHours_ReturnsFalse()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
         var task = new DevelopmentTask("CSV出力", 100, TaskType.BackendImplementation);
@@ -152,7 +158,7 @@ public class GameSimulationTests
     [Test]
     public void TryAllocateHours_UnregisteredEmployee_ReturnsFalse()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var registeredTask = new DevelopmentTask("CSV出力", 100, TaskType.BackendImplementation);
         simulation.AddTask(registeredTask);
         var unregisteredEmployee = CreateEmployee("ハム鈴", 40);
@@ -167,7 +173,7 @@ public class GameSimulationTests
     [Test]
     public void TryAllocateHours_UnregisteredTask_ReturnsFalse()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
         var unregisteredTask = new DevelopmentTask("未登録タスク", 100, TaskType.BackendImplementation);
@@ -182,7 +188,7 @@ public class GameSimulationTests
     [Test]
     public void TryAllocateHours_CompletedTask_ReturnsFalse()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = CreateNeutralSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
         var task = new DevelopmentTask("小さいタスク", 10, TaskType.BackendImplementation);
@@ -201,7 +207,7 @@ public class GameSimulationTests
     [Test]
     public void AdvanceWeek_SumsMultipleEmployeeAllocationsIntoTaskProgress()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = CreateNeutralSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
@@ -219,7 +225,7 @@ public class GameSimulationTests
     [Test]
     public void AdvanceWeek_ResetsEachEmployeeAndTeamAvailableHours()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
@@ -242,7 +248,7 @@ public class GameSimulationTests
     [Test]
     public void AdvanceWeek_ClearsPreviousWeekAllocationState()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = new GameSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
         var task = new DevelopmentTask("ログイン機能", 60, TaskType.BackendImplementation);
@@ -260,7 +266,7 @@ public class GameSimulationTests
     [Test]
     public void AdvanceWeek_MatchesIssueExampleScenario()
     {
-        var simulation = new GameSimulation(initialTechnicalDebt: 0m);
+        var simulation = CreateNeutralSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 
@@ -61,5 +62,72 @@ public class WeekProcessorTests
 
         Assert.AreEqual((decimal)int.MaxValue, task.CompletedProgressHours);
         Assert.IsTrue(task.IsCompleted);
+    }
+
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    [TestCase(true, true)]
+    public void Process_InvalidAllocation_PreservesAllStateAndRetryAppliesCompletionOnce(
+        bool invalidFirst, bool nullEmployeeAllocations)
+    {
+        var skill = new Skill(SkillType.Frontend, 2);
+        var employee = new Employee("社員", 40, new[] { skill });
+        Assert.IsTrue(employee.TryConsumeHours(20));
+        var first = new DevelopmentTask("完了する機能", 10, TaskType.FrontendImplementation);
+        var second = new DevelopmentTask("不正割当を含む機能", 100, TaskType.BackendImplementation);
+        first.ApplyProgress(3m);
+        second.ApplyProgress(2m);
+        var firstHours = new Dictionary<Employee, int> { { employee, 10 } };
+        var invalidHours = nullEmployeeAllocations ? null : new Dictionary<Employee, int> { { employee, -1 } };
+        var allocations = new Dictionary<DevelopmentTask, Dictionary<Employee, int>>();
+        foreach (var task in invalidFirst ? new[] { second, first } : new[] { first, second })
+        {
+            allocations.Add(task, task == first ? firstHours : invalidHours);
+        }
+        var product = new ProductState();
+        var processor = new WeekProcessor();
+
+        if (nullEmployeeAllocations)
+        {
+            Assert.Throws<ArgumentException>(() => processor.Process(allocations, product));
+        }
+        else
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => processor.Process(allocations, product));
+        }
+
+        Assert.AreEqual(3m, first.CompletedProgressHours, "後続の失敗でも先行進捗を確定しない");
+        Assert.IsFalse(first.IsCompleted);
+        Assert.AreEqual(2m, second.CompletedProgressHours);
+        Assert.AreEqual(10m, product.TechnicalDebt);
+        Assert.AreEqual(70m, product.Quality);
+        Assert.AreEqual(20, employee.AvailableHours);
+        Assert.AreEqual(0m, employee.Fatigue);
+        Assert.IsTrue(employee.TryGetSkill(SkillType.Frontend, out var actualSkill));
+        Assert.AreSame(skill, actualSkill);
+        Assert.AreEqual(2, allocations.Count);
+        Assert.AreSame(firstHours, allocations[first]);
+        Assert.AreSame(invalidHours, allocations[second]);
+        Assert.AreEqual(10, firstHours[employee]);
+        if (invalidHours != null)
+        {
+            Assert.AreEqual(-1, invalidHours[employee]);
+        }
+
+        allocations[second] = new Dictionary<Employee, int> { { employee, 10 } };
+        processor.Process(allocations, product);
+
+        Assert.IsTrue(first.IsCompleted);
+        Assert.AreEqual(10m, first.CompletedProgressHours);
+        Assert.AreEqual(6.75m, second.CompletedProgressHours);
+        Assert.AreEqual(11m, product.TechnicalDebt);
+        Assert.AreEqual(69.5m, product.Quality);
+        Assert.AreEqual(20, employee.AvailableHours);
+        Assert.AreEqual(0m, employee.Fatigue);
+
+        processor.Process(allocations, product);
+        Assert.AreEqual(11m, product.TechnicalDebt, "再処理でも完了効果は重複しない");
+        Assert.AreEqual(69.5m, product.Quality);
     }
 }
