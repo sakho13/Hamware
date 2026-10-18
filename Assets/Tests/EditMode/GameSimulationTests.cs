@@ -39,6 +39,37 @@ public class GameSimulationTests
     }
 
     [Test]
+    public void AddEmployee_SameNameDifferentInstances_RegistersBoth()
+    {
+        var simulation = new GameSimulation();
+        var first = CreateEmployee("同名の社員", 20);
+        var second = CreateEmployee("同名の社員", 40);
+
+        simulation.AddEmployee(first);
+        simulation.AddEmployee(second);
+
+        Assert.AreEqual(2, simulation.Employees.Count);
+        Assert.AreEqual(60, simulation.TotalWeeklyHours);
+        Assert.AreEqual(60, simulation.AvailableHours);
+        CollectionAssert.Contains(simulation.Employees, first);
+        CollectionAssert.Contains(simulation.Employees, second);
+    }
+
+    [Test]
+    public void AddEmployee_SameInstanceTwice_DoesNotDoubleTeamHours()
+    {
+        var simulation = new GameSimulation();
+        var employee = CreateEmployee("社員", 40);
+
+        simulation.AddEmployee(employee);
+        simulation.AddEmployee(employee);
+
+        Assert.AreEqual(1, simulation.Employees.Count);
+        Assert.AreEqual(40, simulation.TotalWeeklyHours);
+        Assert.AreEqual(40, simulation.AvailableHours);
+    }
+
+    [Test]
     public void AddEmployee_ReflectsWeeklyTotalIntoAvailableHours()
     {
         var simulation = new GameSimulation();

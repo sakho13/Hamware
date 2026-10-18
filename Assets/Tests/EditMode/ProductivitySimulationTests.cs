@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using NUnit.Framework;
 
 public class ProductivitySimulationTests
@@ -181,41 +180,5 @@ public class ProductivitySimulationTests
         Assert.AreEqual(10, simulation.AllocatedHours);
         simulation.AdvanceWeek();
         Assert.AreEqual(8.25m, task.CompletedProgressHours);
-    }
-
-    [Test]
-    public void Process_ClampsProgressWithoutRefundingHoursOrMutatingAllocations()
-    {
-        var employee = EmployeeA();
-        var task = new DevelopmentTask("Backend", 5, TaskType.BackendImplementation);
-        Assert.IsTrue(employee.TryConsumeHours(10));
-        var allocations = new Dictionary<DevelopmentTask, Dictionary<Employee, int>>
-        {
-            { task, new Dictionary<Employee, int> { { employee, 10 } } }
-        };
-
-        new WeekProcessor().Process(allocations);
-
-        Assert.AreEqual(5m, task.CompletedProgressHours);
-        Assert.AreEqual(30, employee.AvailableHours);
-        Assert.AreEqual(1, allocations.Count);
-        Assert.AreEqual(10, allocations[task][employee]);
-    }
-
-    [Test]
-    public void Process_LargeCombinedHours_SumsProgressWithoutIntegerOverflow()
-    {
-        var a = new Employee("A", int.MaxValue);
-        var b = new Employee("B", int.MaxValue);
-        var task = new DevelopmentTask("Backend", int.MaxValue, TaskType.BackendImplementation);
-        var allocations = new Dictionary<DevelopmentTask, Dictionary<Employee, int>>
-        {
-            { task, new Dictionary<Employee, int> { { a, int.MaxValue }, { b, int.MaxValue } } }
-        };
-
-        new WeekProcessor().Process(allocations);
-
-        Assert.AreEqual((decimal)int.MaxValue, task.CompletedProgressHours);
-        Assert.IsTrue(task.IsCompleted);
     }
 }

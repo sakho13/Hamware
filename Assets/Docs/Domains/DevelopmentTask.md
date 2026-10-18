@@ -7,5 +7,5 @@ DevelopmentTask は開発対象となるタスクを表します。
 - `RequiredProgressHours`は完了までに必要な基準進捗工数を整数で持つ。
 - `CompletedProgressHours`はスキル補正後の累積進捗工数を`decimal`で持つ。社員の実際の消費勤務時間とは異なる。
 - 進捗工数の単位は基準となる時間相当であり、`Employee.AvailableHours`などの実勤務時間とは区別する。
-- `ApplyProgress(decimal progressHours)`は正の進捗を丸めずに蓄積し、0以下は無視する。
+- `ApplyProgress(decimal progressHours)`は正の進捗をdecimalの精度で蓄積し、0以下は無視する。
 - 進捗が必要工数に達すると完了扱いになる。必要工数を超える進捗は切り捨て、完了後に追加しても増えない。
