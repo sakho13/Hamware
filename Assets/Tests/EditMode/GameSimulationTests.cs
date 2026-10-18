@@ -2,7 +2,7 @@ using NUnit.Framework;
 
 public class GameSimulationTests
 {
-    // 従来の工数配分テストでは、関連スキルLv2で進捗倍率を1に揃える。
+    // 工数配分を独立検証する社員は、関連スキルLv2でスキル倍率を1に揃える。
     private static Employee CreateEmployee(string name, int hours)
     {
         return new Employee(name, hours, new[]
@@ -11,6 +11,12 @@ public class GameSimulationTests
             new Skill(SkillType.Database, 2),
             new Skill(SkillType.Testing, 2)
         });
+    }
+
+    // 進捗の数値を検証するテストだけ、初期負債0としてプロダクト補正を中立にする。
+    private static GameSimulation CreateNeutralSimulation()
+    {
+        return new GameSimulation(initialTechnicalDebt: 0m);
     }
 
     [Test]
@@ -182,7 +188,7 @@ public class GameSimulationTests
     [Test]
     public void TryAllocateHours_CompletedTask_ReturnsFalse()
     {
-        var simulation = new GameSimulation();
+        var simulation = CreateNeutralSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         simulation.AddEmployee(hamda);
         var task = new DevelopmentTask("小さいタスク", 10, TaskType.BackendImplementation);
@@ -201,7 +207,7 @@ public class GameSimulationTests
     [Test]
     public void AdvanceWeek_SumsMultipleEmployeeAllocationsIntoTaskProgress()
     {
-        var simulation = new GameSimulation();
+        var simulation = CreateNeutralSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
@@ -260,7 +266,7 @@ public class GameSimulationTests
     [Test]
     public void AdvanceWeek_MatchesIssueExampleScenario()
     {
-        var simulation = new GameSimulation();
+        var simulation = CreateNeutralSimulation();
         var hamda = CreateEmployee("ハム田", 40);
         var hamkawa = CreateEmployee("ハム川", 40);
         simulation.AddEmployee(hamda);
