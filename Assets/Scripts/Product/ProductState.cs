@@ -25,13 +25,29 @@ public sealed class ProductState
     /// <summary>
     /// 当週の全完了効果を合算してから一度だけ反映する。外部からの任意更新は公開しない。
     /// </summary>
-    internal void ApplyChanges(decimal technicalDebtChange, decimal qualityChange)
+    internal ProductWeekResult ApplyChanges(decimal technicalDebtChange, decimal qualityChange)
     {
-        TechnicalDebt = ApplyClampedChange(TechnicalDebt, technicalDebtChange);
-        Quality = ApplyClampedChange(Quality, qualityChange);
+        return PrepareChanges(technicalDebtChange, qualityChange).Commit();
     }
 
-    internal static decimal ApplyClampedChange(decimal current, decimal change)
+    /// <summary>上下限制御を所有者自身が行い、確定と週報で同じ結果を使う。</summary>
+    internal PreparedChange<ProductWeekResult> PrepareChanges(decimal technicalDebtChange, decimal qualityChange)
+    {
+        decimal debtBefore = TechnicalDebt;
+        decimal qualityBefore = Quality;
+        var result = new ProductWeekResult(debtBefore, qualityBefore,
+            ApplyClampedChange(debtBefore, technicalDebtChange), ApplyClampedChange(qualityBefore, qualityChange),
+            technicalDebtChange, qualityChange);
+        return new PreparedChange<ProductWeekResult>(result,
+            () => TechnicalDebt == debtBefore && Quality == qualityBefore,
+            () =>
+            {
+                TechnicalDebt = result.TechnicalDebtAfter;
+                Quality = result.QualityAfter;
+            });
+    }
+
+    private static decimal ApplyClampedChange(decimal current, decimal change)
     {
         // 加算前に増減量を制限し、decimalの最大・最小値でも加算をオーバーフローさせない。
         return current + Math.Max(MinValue - current, Math.Min(change, MaxValue - current));

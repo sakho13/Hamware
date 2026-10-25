@@ -31,13 +31,13 @@ public sealed class EmployeeWeekResult
     public int WorkedHours { get; }
     public decimal FatigueBefore { get; }
     public decimal FatigueAfter { get; }
-    internal EmployeeWeekResult(Employee employee)
+    internal EmployeeWeekResult(Guid employeeId, string name, int workedHours, decimal fatigueBefore, decimal fatigueAfter)
     {
-        EmployeeId = employee.Id;
-        Name = employee.Name;
-        WorkedHours = employee.WeeklyAvailableHours - employee.AvailableHours;
-        FatigueBefore = employee.Fatigue;
-        FatigueAfter = FatigueCalculator.CalculateNextFatigue(FatigueBefore, WorkedHours, employee.WeeklyAvailableHours);
+        EmployeeId = employeeId;
+        Name = name;
+        WorkedHours = workedHours;
+        FatigueBefore = fatigueBefore;
+        FatigueAfter = fatigueAfter;
     }
 }
 
@@ -72,7 +72,7 @@ public sealed class TaskWeekResult
     public TaskType Type { get; }
     public int RequiredProgress { get; }
     public decimal ProgressBefore { get; }
-    public decimal ProgressAfter => ProgressBefore + AppliedProgress;
+    public decimal ProgressAfter { get; }
     public decimal CalculatedProgress { get; }
     public decimal AppliedProgress { get; }
     public decimal DiscardedProgress => CalculatedProgress - AppliedProgress;
@@ -82,24 +82,22 @@ public sealed class TaskWeekResult
     public decimal QualityChange { get; }
     public IReadOnlyList<WorkContribution> Contributions { get; }
 
-    internal TaskWeekResult(DevelopmentTask task, IEnumerable<WorkContribution> contributions)
+    internal TaskWeekResult(DevelopmentTask task, IReadOnlyList<WorkContribution> contributions,
+        decimal calculatedProgress, DevelopmentTask.ProgressChange change, decimal debtChange, decimal qualityChange)
     {
         TaskId = task.Id;
         Name = task.Name;
         Type = task.Type;
         RequiredProgress = task.RequiredProgressHours;
-        ProgressBefore = task.CompletedProgressHours;
+        ProgressBefore = change.Before;
+        ProgressAfter = change.After;
         Contributions = contributions.ToList().AsReadOnly();
         WorkedHours = Contributions.Sum(c => (long)c.WorkedHours);
-        CalculatedProgress = Contributions.Sum(c => c.CalculatedProgress);
-        AppliedProgress = Math.Min(CalculatedProgress, RequiredProgress - ProgressBefore);
-        CompletedThisWeek = !task.IsCompleted && ProgressAfter == RequiredProgress;
-        if (CompletedThisWeek)
-        {
-            var profile = TaskProductProfiles.Get(Type);
-            TechnicalDebtChange = RequiredProgress * profile.TechnicalDebtChangePerProgressHour;
-            QualityChange = RequiredProgress * profile.QualityChangePerProgressHour;
-        }
+        CalculatedProgress = calculatedProgress;
+        AppliedProgress = change.Applied;
+        CompletedThisWeek = change.CompletedThisWeek;
+        TechnicalDebtChange = debtChange;
+        QualityChange = qualityChange;
     }
 }
 
@@ -114,13 +112,14 @@ public sealed class ProductWeekResult
     public decimal AppliedTechnicalDebtChange => TechnicalDebtAfter - TechnicalDebtBefore;
     public decimal AppliedQualityChange => QualityAfter - QualityBefore;
 
-    internal ProductWeekResult(ProductState product, decimal debtChange, decimal qualityChange)
+    internal ProductWeekResult(decimal debtBefore, decimal qualityBefore, decimal debtAfter, decimal qualityAfter,
+        decimal debtChange, decimal qualityChange)
     {
-        TechnicalDebtBefore = product.TechnicalDebt;
-        QualityBefore = product.Quality;
+        TechnicalDebtBefore = debtBefore;
+        QualityBefore = qualityBefore;
         RequestedTechnicalDebtChange = debtChange;
         RequestedQualityChange = qualityChange;
-        TechnicalDebtAfter = ProductState.ApplyClampedChange(TechnicalDebtBefore, debtChange);
-        QualityAfter = ProductState.ApplyClampedChange(QualityBefore, qualityChange);
+        TechnicalDebtAfter = debtAfter;
+        QualityAfter = qualityAfter;
     }
 }

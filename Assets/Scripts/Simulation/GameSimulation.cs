@@ -11,16 +11,26 @@ public class GameSimulation
         new Dictionary<DevelopmentTask, Dictionary<Employee, int>>();
     private readonly WeekProcessor _weekProcessor = new WeekProcessor();
 
+    /// <summary>このシミュレーションが所有するプロダクト。任意の状態更新は公開しない。</summary>
     public ProductState Product { get; }
+    /// <summary>これから計画・確定する週番号。1ターンは1週間。</summary>
     public int CurrentWeek { get; private set; } = 1;
+    /// <summary>全社員の当週の残り実勤務時間。</summary>
     public int AvailableHours => _employees.Sum(e => e.AvailableHours);
+    /// <summary>当週の割当済み実勤務時間。補正後の進捗とは異なる。</summary>
     public int AllocatedHours => _allocations.Values.SelectMany(d => d.Values).Sum();
+    /// <summary>在籍社員の週あたり勤務時間の上限合計。</summary>
     public int TotalWeeklyHours => _employees.Sum(e => e.WeeklyAvailableHours);
+    /// <summary>登録順のタスク一覧。コレクションへの追加・削除はできない。</summary>
     public IReadOnlyList<DevelopmentTask> Tasks { get; }
+    /// <summary>登録順の社員一覧。コレクションへの追加・削除はできない。</summary>
     public IReadOnlyList<Employee> Employees { get; }
+    /// <summary>確定順の不変レポート。失敗した週は追加しない。</summary>
     public IReadOnlyList<WeekResult> History { get; }
+    /// <summary>最後に確定した週の結果。初回確定前はnull。</summary>
     public WeekResult LastWeekResult => _history.Count == 0 ? null : _history[_history.Count - 1];
 
+    /// <exception cref="System.ArgumentOutOfRangeException">初期負債または品質が0〜100の範囲外の場合。</exception>
     public GameSimulation(decimal initialTechnicalDebt = ProductState.DefaultTechnicalDebt,
         decimal initialQuality = ProductState.DefaultQuality)
     {
@@ -30,11 +40,13 @@ public class GameSimulation
         History = _history.AsReadOnly();
     }
 
+    /// <summary>タスクを登録する。null・同一インスタンスの再登録は無視し、同名の別インスタンスは許可する。</summary>
     public void AddTask(DevelopmentTask task)
     {
         if (task != null && !_tasks.Contains(task)) _tasks.Add(task);
     }
 
+    /// <summary>社員を登録する。null・同一インスタンスの再登録は無視する。</summary>
     public void AddEmployee(Employee employee)
     {
         if (employee != null && !_employees.Contains(employee)) _employees.Add(employee);
@@ -54,6 +66,7 @@ public class GameSimulation
         return result.AsReadOnly();
     }
 
+    /// <summary>指定ペアの当週の合計実勤務時間。割当がない場合は0。</summary>
     public int GetAllocatedHours(Employee employee, DevelopmentTask task)
     {
         return employee != null && task != null &&
@@ -65,6 +78,7 @@ public class GameSimulation
     public bool TryAllocateHours(Employee employee, DevelopmentTask task, int hours)
         => TryAllocateHours(employee, task, hours, out _);
 
+    /// <summary>正の実勤務時間を追加する。未登録・完了済み・残時間超過は理由付きで拒否し、状態を変えない。</summary>
     public bool TryAllocateHours(Employee employee, DevelopmentTask task, int hours, out AllocationFailure failure)
     {
         failure = ValidateTarget(employee, task, hours);
@@ -78,6 +92,7 @@ public class GameSimulation
         return TrySetAllocatedHours(employee, task, GetAllocatedHours(employee, task) + hours, out failure);
     }
 
+    /// <summary>指定ペアの当週の合計時間を設定する。0で取消。過去の週は変更しない。</summary>
     public bool TrySetAllocatedHours(Employee employee, DevelopmentTask task, int hours)
         => TrySetAllocatedHours(employee, task, hours, out _);
 
@@ -94,7 +109,14 @@ public class GameSimulation
             return false;
         }
         if (delta == 0) return true;
-        if (delta > 0) employee.TryConsumeHours(delta);
+        if (delta > 0)
+        {
+            if (!employee.TryConsumeHours(delta))
+            {
+                failure = AllocationFailure.InsufficientHours;
+                return false;
+            }
+        }
         else employee.ReturnAllocatedHours(-delta);
 
         if (hours == 0)
@@ -125,15 +147,21 @@ public class GameSimulation
         return AllocationFailure.None;
     }
 
-    /// <summary>全計算と結果作成に成功してから確定。現在週には更新前の条件を使う。</summary>
+    /// <summary>
+    /// 1. 次週番号・全割当を検証し、更新前のスキル・疲労・負債で計算する。
+    /// 2. 各ドメインが計算した確定値で不変レポートを確保する。ここまでは状態を変えない。
+    /// 3. 全変更を検証してから進捗、合算完了効果、社員の疲労・時間を確定する。
+    /// 4. 割当をクリアし、週番号・履歴を更新する。新しい疲労・負債は翌週から効く。
+    /// 単一スレッドで呼び出す。レポートには表示用の丸めを適用しない。
+    /// </summary>
+    /// <exception cref="System.OverflowException">週番号または計算結果が数値の範囲を超える場合。確定前に失敗する。</exception>
+    /// <exception cref="System.InvalidOperationException">計算から確定の間に状態が変更された場合。確定前に失敗する。</exception>
     public WeekResult AdvanceWeek()
     {
         int nextWeek = checked(CurrentWeek + 1);
-        var prepared = _weekProcessor.Prepare(_allocations, Product);
-        var employees = _employees.Select(e => new EmployeeWeekResult(e)).ToList();
-        var result = new WeekResult(CurrentWeek, employees, prepared.TaskResults, prepared.ProductResult);
+        var prepared = _weekProcessor.Prepare(_allocations, Product, _tasks, _employees);
+        var result = new WeekResult(CurrentWeek, prepared.EmployeeResults, prepared.TaskResults, prepared.ProductResult);
         prepared.Commit();
-        foreach (var employee in _employees) employee.CompleteWeek();
         _allocations.Clear();
         CurrentWeek = nextWeek;
         _history.Add(result);
