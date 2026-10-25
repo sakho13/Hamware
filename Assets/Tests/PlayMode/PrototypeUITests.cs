@@ -9,100 +9,147 @@ using UnityEngine.UIElements;
 
 public class PrototypeUITests
 {
-    [UnityTest]
-    public IEnumerator Screen_EditingConfirmationReportAndRestartUseRealControls()
+    private HamwareUI _ui;
+    private GameSimulation Game => _ui.Session.Simulation;
+
+    [UnitySetUp]
+    public IEnumerator OpenPrototype()
     {
         yield return SceneManager.LoadSceneAsync("Hamware");
         yield return null;
-        var ui = Object.FindAnyObjectByType<HamwareUI>();
-        Assert.IsNotNull(ui);
-        var game = ui.Session.Simulation;
-        ui.Root.Q<IntegerField>("hours-0").value = 20;
-        Click(ui, "apply-0");
-        Assert.AreEqual(20, game.AllocatedHours);
-        ui.Root.Q<IntegerField>("hours-0").value = 50;
-        Click(ui, "apply-0");
-        Assert.AreEqual(20, game.AllocatedHours);
-        StringAssert.Contains("残り時間", ui.Root.Q<Label>("status").text);
-        Click(ui, "cancel-0");
-        Assert.AreEqual(80, game.AvailableHours);
-        Click(ui, "employee-1");
-        StringAssert.Contains("ハム川", ui.Root.Q<Label>("allocation-title").text);
-        ui.Root.Q<IntegerField>("hours-1").value = 30;
-        Click(ui, "apply-1");
-        yield return Capture(ui, "planning.png");
-        yield return Capture(ui, "planning-1280x720.png", 1280, 720);
-        Click(ui, "advance");
-        Assert.AreEqual(1, game.CurrentWeek, "確定する前は週を進めない");
-        Assert.IsFalse(ui.Root.Q<Button>("apply-0").enabledInHierarchy, "確認中は背面の計画を編集させない");
-        var confirm = ui.Root.Q<Button>("confirm-week");
-        Click(confirm); Click(confirm);
-        Assert.AreEqual(2, game.CurrentWeek);
-        Assert.AreEqual(1, game.History.Count);
-        Assert.IsNotNull(ui.Root.Q("report-content"));
-        yield return Capture(ui, "week-report.png");
-        Click(ui, "continue");
-        Assert.IsFalse(ui.Session.IsShowingReport);
-        for (int i = 0; i < 11; i++)
-        {
-            // 品質・負債の改善、連続稼働、休養を画面の操作で通す。
-            if (i != 6)
-                for (int employeeIndex = 0; employeeIndex < game.Employees.Count; employeeIndex++)
-                {
-                    int taskIndex = i == 0 ? 4 : i == 1 ? 5 :
-                        game.Tasks.ToList().FindIndex(t => !t.IsCompleted);
-                    if (taskIndex >= 0 && !game.Tasks[taskIndex].IsCompleted)
-                    {
-                        Click(ui, "employee-" + employeeIndex);
-                        ui.Root.Q<IntegerField>("hours-" + taskIndex).value = 40;
-                        Click(ui, "apply-" + taskIndex);
-                    }
-                }
-            Click(ui, "advance"); Click(ui, "confirm-week"); Click(ui, "continue");
-            Assert.AreEqual(game.CurrentWeek - 1, game.LastWeekResult.Week);
-            Assert.AreEqual(game.Product.Quality, game.LastWeekResult.Product.QualityAfter);
-            Assert.AreEqual(game.Product.TechnicalDebt, game.LastWeekResult.Product.TechnicalDebtAfter);
-            foreach (var employee in game.Employees)
-                Assert.AreEqual(employee.Fatigue, game.LastWeekResult.Employees.Single(e => e.EmployeeId == employee.Id).FatigueAfter);
-            if (i == 5)
-            {
-                Assert.AreEqual(2, ui.Root.Query(className: "sleepy").ToList().Count);
-                yield return Capture(ui, "fatigue.png");
-            }
-            if (i == 6) Assert.IsTrue(game.Employees.All(e => e.Fatigue == 30m), "休養で60から30へ回復");
-        }
-        Assert.AreEqual(13, game.CurrentWeek);
-        Assert.AreEqual(12, game.History.Count);
-        Assert.AreEqual(80, game.AvailableHours);
-        // 固定タスクがなくなった後も、画面から次の週へ進める。
-        for (int i = 0; i < 40 && game.Tasks.Any(t => !t.IsCompleted); i++)
-        {
-            int taskIndex = game.Tasks.ToList().FindIndex(t => !t.IsCompleted);
-            for (int employeeIndex = 0; employeeIndex < game.Employees.Count; employeeIndex++)
-            {
-                Click(ui, "employee-" + employeeIndex);
-                ui.Root.Q<IntegerField>("hours-" + taskIndex).value = 40;
-                Click(ui, "apply-" + taskIndex);
-            }
-            Click(ui, "advance"); Click(ui, "confirm-week"); Click(ui, "continue");
-        }
-        Assert.IsTrue(game.Tasks.All(t => t.IsCompleted));
-        Assert.IsFalse(ui.Root.Q<Button>("apply-0").enabledInHierarchy);
-        int finalWeek = game.CurrentWeek;
-        Click(ui, "advance"); Click(ui, "confirm-week"); Click(ui, "continue");
-        Assert.AreEqual(finalWeek + 1, game.CurrentWeek);
-        Assert.AreEqual(0, game.LastWeekResult.WorkedHours);
-        Click(ui, "restart"); Click(ui, "close-modal");
-        Assert.AreEqual(finalWeek + 1, game.CurrentWeek);
-        Click(ui, "restart"); Click(ui, "confirm-restart");
-        Assert.AreEqual(1, ui.Session.Simulation.CurrentWeek);
-        Assert.AreEqual(0, ui.Session.Simulation.History.Count);
+        _ui = Object.FindAnyObjectByType<HamwareUI>();
+        Assert.IsNotNull(_ui);
+        Assert.IsNotNull(_ui.GetComponent<UIDocument>(), "UIDocumentをシーンに保持する");
     }
 
-    private static void Click(HamwareUI ui, string name) => Click(ui.Root.Q<Button>(name));
-    private static void Click(Button button)
+    [UnityTest]
+    public IEnumerator Allocations_CanBeEditedRejectedCancelledAndReassigned()
     {
-        Assert.IsNotNull(button);
+        var backend = Game.Tasks.First(t => t.Type == TaskType.BackendImplementation);
+        var frontend = Game.Tasks.First(t => t.Type == TaskType.FrontendImplementation);
+        var backendEmployee = Game.Employees.Single(e => e.TryGetSkill(SkillType.Backend, out var s) && s.Level == 4);
+        var frontendEmployee = Game.Employees.Single(e => e.TryGetSkill(SkillType.Frontend, out _));
+
+        Allocate(backendEmployee, backend, 20);
+        Assert.AreEqual(20, Game.AllocatedHours);
+        Allocate(backendEmployee, backend, 50);
+        Assert.AreEqual(20, Game.AllocatedHours);
+        StringAssert.Contains("残り時間", _ui.Root.Q<Label>("status").text);
+        Click("cancel-" + backend.Id);
+        Assert.AreEqual(80, Game.AvailableHours);
+        Allocate(frontendEmployee, frontend, 30);
+        Assert.AreEqual(30, Game.GetAllocatedHours(frontendEmployee, frontend));
+        StringAssert.Contains(frontendEmployee.Name, _ui.Root.Q<Label>("allocation-title").text);
+        yield return Capture("planning.png");
+        yield return Capture("planning-1280x720.png", 1280, 720);
+    }
+
+    [UnityTest]
+    public IEnumerator ConfirmationAndReport_BlockBackgroundControls()
+    {
+        Click("advance");
+        Assert.AreEqual(1, Game.CurrentWeek);
+        Assert.IsFalse(_ui.Root.Q<Button>("restart").enabledInHierarchy);
+        Click("close-modal");
+        Assert.AreEqual(1, Game.CurrentWeek);
+        Assert.IsTrue(_ui.Root.Q<Button>("advance").enabledInHierarchy);
+
+        Click("advance");
+        Click("confirm-week");
+
+        Assert.AreEqual(2, Game.CurrentWeek);
+        Assert.AreEqual(1, Game.History.Count);
+        Assert.IsNotNull(_ui.Root.Q("report-content"));
+        Assert.IsFalse(_ui.Root.Q<Button>("advance").enabledInHierarchy);
+        // 現在のパネル上の無効なボタンを操作する。削除済みの確認ボタンには送らない。
+        Click("advance");
+        Assert.AreEqual(2, Game.CurrentWeek);
+        yield return Capture("week-report.png");
+        Click("continue");
+        Assert.IsTrue(_ui.Root.Q<Button>("advance").enabledInHierarchy);
+        Assert.IsFalse(_ui.Session.IsShowingReport);
+    }
+
+    [UnityTest]
+    public IEnumerator TwelveWeeks_KeepReportsConsistent_AndShowFatigueAndRecovery()
+    {
+        for (int week = 1; week <= 12; week++)
+        {
+            if (week != 7)
+            {
+                var task = week == 1 ? Game.Tasks.First(t => t.Type == TaskType.Testing) :
+                    week == 2 ? Game.Tasks.First(t => t.Type == TaskType.Architecture) :
+                    Game.Tasks.FirstOrDefault(t => !t.IsCompleted);
+                if (task != null && !task.IsCompleted)
+                    foreach (var employee in Game.Employees) Allocate(employee, task, 40);
+            }
+            AdvanceAndContinue();
+            AssertReportMatchesGame();
+            if (week == 6)
+            {
+                Assert.AreEqual(2, _ui.Root.Query(className: "sleepy").ToList().Count);
+                yield return Capture("fatigue.png");
+            }
+            if (week == 7) Assert.IsTrue(Game.Employees.All(e => e.Fatigue == 30m));
+        }
+        Assert.AreEqual(13, Game.CurrentWeek);
+        Assert.AreEqual(12, Game.History.Count);
+        Assert.AreEqual(80, Game.AvailableHours);
+    }
+
+    [UnityTest]
+    public IEnumerator CompletedBacklog_AllowsAnotherWeek_AndRestartRequiresConfirmation()
+    {
+        for (int week = 0; week < 60 && Game.Tasks.Any(t => !t.IsCompleted); week++)
+        {
+            var task = Game.Tasks.First(t => !t.IsCompleted);
+            foreach (var employee in Game.Employees) Allocate(employee, task, 40);
+            AdvanceAndContinue();
+        }
+        Assert.IsTrue(Game.Tasks.All(t => t.IsCompleted));
+        Assert.IsTrue(_ui.Root.Query<Button>(className: "set-hours").ToList().All(b => !b.enabledInHierarchy));
+        int previous = Game.CurrentWeek;
+        AdvanceAndContinue();
+        Assert.AreEqual(previous + 1, Game.CurrentWeek);
+        Assert.AreEqual(0, Game.LastWeekResult.WorkedHours);
+        Click("restart");
+        Click("close-modal");
+        Assert.AreEqual(previous + 1, Game.CurrentWeek);
+        Click("restart");
+        Click("confirm-restart");
+        Assert.AreEqual(1, Game.CurrentWeek);
+        Assert.IsEmpty(Game.History);
+        yield return null;
+    }
+
+    private void AssertReportMatchesGame()
+    {
+        Assert.AreEqual(Game.CurrentWeek - 1, Game.LastWeekResult.Week);
+        Assert.AreEqual(Game.Product.Quality, Game.LastWeekResult.Product.QualityAfter);
+        Assert.AreEqual(Game.Product.TechnicalDebt, Game.LastWeekResult.Product.TechnicalDebtAfter);
+        foreach (var employee in Game.Employees)
+            Assert.AreEqual(employee.Fatigue, Game.LastWeekResult.Employees.Single(e => e.EmployeeId == employee.Id).FatigueAfter);
+    }
+
+    private void Allocate(Employee employee, DevelopmentTask task, int hours)
+    {
+        Click("employee-" + employee.Id);
+        _ui.Root.Q<IntegerField>("hours-" + task.Id).value = hours;
+        Click("apply-" + task.Id);
+    }
+
+    private void AdvanceAndContinue()
+    {
+        Click("advance");
+        Click("confirm-week");
+        Click("continue");
+    }
+
+    private void Click(string name)
+    {
+        var button = _ui.Root.Q<Button>(name);
+        Assert.IsNotNull(button, name);
+        Assert.IsNotNull(button.panel, "現在表示中のボタンだけにイベントを送る");
         using (var click = ClickEvent.GetPooled())
         {
             click.target = button;
@@ -110,12 +157,12 @@ public class PrototypeUITests
         }
     }
 
-    private static IEnumerator Capture(HamwareUI ui, string name, int width = 1600, int height = 1000)
+    private IEnumerator Capture(string name, int width = 1600, int height = 1000)
     {
         var directory = System.Environment.GetEnvironmentVariable("HAMWARE_CAPTURE_DIR");
         if (string.IsNullOrEmpty(directory)) yield break;
         Directory.CreateDirectory(directory);
-        var panel = ui.GetComponent<UIDocument>().panelSettings;
+        var panel = _ui.GetComponent<UIDocument>().panelSettings;
         var target = new RenderTexture(width, height, 24);
         target.Create();
         var previousTarget = panel.targetTexture;
@@ -125,11 +172,9 @@ public class PrototypeUITests
         try
         {
             for (int i = 0; i < 10; i++) yield return null;
-            foreach (var metric in ui.Root.Query(className: "metric").ToList())
-                Assert.LessOrEqual(metric.Q(className: "small").worldBound.yMax, metric.worldBound.yMax,
-                    "指標の説明文をカード内に収める");
-            Assert.LessOrEqual(ui.Root.Q(className: "footer").worldBound.yMax, ui.Root.worldBound.yMax,
-                "週送りの操作を画面内に収める");
+            foreach (var metric in _ui.Root.Query(className: "metric").ToList())
+                Assert.LessOrEqual(metric.Q(className: "small").worldBound.yMax, metric.worldBound.yMax);
+            Assert.LessOrEqual(_ui.Root.Q(className: "footer").worldBound.yMax, _ui.Root.worldBound.yMax);
             RenderTexture.active = target;
             texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
