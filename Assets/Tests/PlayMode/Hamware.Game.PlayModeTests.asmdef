@@ -1,6 +1,6 @@
 {
     "name": "Hamware.Game.PlayModeTests",
-    "references": ["Hamware.Game", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
+    "references": ["Hamware.Game", "Hamware.UI", "UnityEngine.TestRunner", "UnityEditor.TestRunner"],
     "overrideReferences": true,
     "precompiledReferences": ["nunit.framework.dll"],
     "defineConstraints": ["UNITY_INCLUDE_TESTS"]

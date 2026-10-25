@@ -5,6 +5,7 @@ using UnityEngine.UIElements;
 
 /// <summary>UI Toolkitによる試作画面。計算はSimulation、画面の進行制御はPrototypeSessionが担当する。</summary>
 [DisallowMultipleComponent]
+[RequireComponent(typeof(UIDocument))]
 public sealed class HamwareUI : MonoBehaviour
 {
     public PrototypeSession Session { get; private set; }
@@ -26,7 +27,7 @@ public sealed class HamwareUI : MonoBehaviour
         _panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
         _panel.referenceResolution = new Vector2Int(1600, 1000);
         _panel.match = 0.5f;
-        var document = GetComponent<UIDocument>() ?? gameObject.AddComponent<UIDocument>();
+        var document = GetComponent<UIDocument>();
         document.panelSettings = _panel;
         Root = document.rootVisualElement;
         Root.styleSheets.Add(Resources.Load<StyleSheet>("Hamware"));
@@ -110,7 +111,7 @@ public sealed class HamwareUI : MonoBehaviour
         team.Add(Text("今週のチーム", "section-title"));
         team.Add(Text("担当者を選択", "muted"));
         for (int i = 0; i < Game.Employees.Count; i++) AddEmployee(team, i);
-        team.Add(Text("休養も、大切な仕事。\n週40hのうち30hで疲労は変わらず、\n少なく働くと回復します。", "tip"));
+        team.Add(Text(PrototypePresentation.RestHint(Game.Employees[_selected].WeeklyAvailableHours), "tip"));
         workspace.Add(team);
         var backlog = Box("backlog");
         var title = Text($"{Game.Employees[_selected].Name}の工数を配分", "section-title");
@@ -148,14 +149,14 @@ public sealed class HamwareUI : MonoBehaviour
     private void AddEmployee(VisualElement team, int index)
     {
         var employee = Game.Employees[index];
-        var card = ActionButton("", "employee-" + index, () => { _selected = index; Render(); }, "employee-card");
+        var card = ActionButton("", "employee-" + employee.Id, () => { _selected = index; Render(); }, "employee-card");
         if (index == _selected) card.AddToClassList("selected");
         var top = Box("employee-top");
         top.Add(Hamster(employee.Fatigue, index));
         var info = Box("employee-info");
         info.Add(Text(employee.Name, "employee-name"));
         info.Add(Text($"残り {employee.AvailableHours} / {employee.WeeklyAvailableHours} h", "employee-hours"));
-        info.Add(Text(employee.Fatigue >= 60 ? "少し休みたい…" : employee.Fatigue >= 30 ? "ひと息つこう" : "今日も、こつこつ。", "muted"));
+        info.Add(Text(PrototypePresentation.FatigueMessage(employee.Fatigue), "muted"));
         top.Add(info);
         card.Add(top);
         card.Add(Text($"疲労  {N(employee.Fatigue)} / 100", "small"));
@@ -168,7 +169,7 @@ public sealed class HamwareUI : MonoBehaviour
     {
         var hamster = Box("hamster");
         if (variant == 1) hamster.AddToClassList("gray");
-        if (fatigue >= 60) hamster.AddToClassList("sleepy");
+        if (fatigue >= PrototypePresentation.SleepyFaceThreshold) hamster.AddToClassList("sleepy");
         foreach (string css in new[] { "ear-left", "ear-right", "face", "cheek-left", "cheek-right", "eye-left", "eye-right" })
             hamster.Add(Box(css));
         hamster.Add(Text("ω", "mouth"));
@@ -184,7 +185,7 @@ public sealed class HamwareUI : MonoBehaviour
         if (task.IsCompleted) row.AddToClassList("completed");
         var heading = Box("task-heading");
         heading.Add(Text(task.Name, "task-title"));
-        heading.Add(Text(task.IsCompleted ? "完了" : Kind(task.Type), "badge"));
+        heading.Add(Text(task.IsCompleted ? "完了" : PrototypePresentation.Kind(task.Type), "badge"));
         row.Add(heading);
         row.Add(new ProgressBar
         {
@@ -193,16 +194,16 @@ public sealed class HamwareUI : MonoBehaviour
         });
         var edit = Box("task-edit");
         edit.Add(Text(string.Join("  /  ", Game.Employees.Select(e => $"{e.Name} {Game.GetAllocatedHours(e, task)}h")), "assignments"));
-        var input = new IntegerField { name = "hours-" + index, value = Game.GetAllocatedHours(employee, task), isDelayed = false };
+        var input = new IntegerField { name = "hours-" + task.Id, value = Game.GetAllocatedHours(employee, task), isDelayed = false };
         input.AddToClassList("hours-input");
         input.tooltip = "選択した社員から割り当てる合計時間（0で取消）";
         edit.Add(input);
         edit.Add(Text("h", "unit"));
-        edit.Add(ActionButton("設定", "apply-" + index, () => SetHours(task, input.value), "set-hours"));
-        edit.Add(ActionButton("取消", "cancel-" + index, () => SetHours(task, 0), "quiet"));
+        edit.Add(ActionButton("設定", "apply-" + task.Id, () => SetHours(task, input.value), "set-hours"));
+        edit.Add(ActionButton("取消", "cancel-" + task.Id, () => SetHours(task, 0), "quiet"));
         edit.SetEnabled(!task.IsCompleted);
         row.Add(edit);
-        row.Add(Text(task.IsCompleted ? "完了済みのため割り当てできません。" : Effect(task.Type), "small"));
+        row.Add(Text(task.IsCompleted ? "完了済みのため割り当てできません。" : PrototypePresentation.Effect(task.Type), "small"));
         parent.Add(row);
     }
 
@@ -305,16 +306,14 @@ public sealed class HamwareUI : MonoBehaviour
 
     private static string N(decimal value) => value.ToString("0.###");
     private static string Signed(decimal value) => value.ToString("+0.###;-0.###;0");
-    private static string Kind(TaskType type) => type == TaskType.Testing ? "品質改善" : type == TaskType.Architecture ? "負債改善" : "機能開発";
-    private static string Effect(TaskType type) => type == TaskType.Testing ? "完了すると品質が上がります。" : type == TaskType.Architecture ? "完了すると負債が減り、翌週から開発が進みやすくなります。" : "完了すると機能が増え、負債が増加・品質が少し低下します。";
-    private static string FailureText(AllocationFailure failure)
+    private static string FailureText(PlanningFailure failure)
     {
-        switch (failure)
+        if (failure.IsReportOpen) return "週報を確認し、次週の計画へ進んでください。";
+        switch (failure.AllocationReason)
         {
             case AllocationFailure.InvalidHours: return "時間は0以上の整数で入力してください。";
             case AllocationFailure.InsufficientHours: return "残り時間を超えています。他の割当を減らすか、入力時間を減らしてください。";
             case AllocationFailure.CompletedTask: return "完了済みのタスクには割り当てできません。";
-            case AllocationFailure.PlanningLocked: return "週報を確認し、次週の計画へ進んでください。";
             default: return "この社員またはタスクには割り当てできません。計画を確認してください。";
         }
     }

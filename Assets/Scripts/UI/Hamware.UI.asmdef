@@ -1,0 +1,4 @@
+{
+    "name": "Hamware.UI",
+    "references": ["Hamware.Game"]
+}

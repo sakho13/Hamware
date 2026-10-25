@@ -1,3 +1,4 @@
 {
-    "name": "Hamware.Game"
+    "name": "Hamware.Game",
+    "noEngineReferences": true
 }

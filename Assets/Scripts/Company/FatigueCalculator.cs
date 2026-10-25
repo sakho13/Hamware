@@ -8,7 +8,8 @@ public static class FatigueCalculator
     public const decimal MinFatigue = 0m;
     public const decimal MaxFatigue = 100m;
 
-    private const decimal NeutralUtilization = 0.75m;
+    /// <summary>疲労が増減しない週の稼働率。表示もこの値を参照する。</summary>
+    public const decimal NeutralUtilization = 0.75m;
     private const decimal ChangePerUtilization = 40m;
     private const decimal MinProductivityMultiplier = 0.5m;
 

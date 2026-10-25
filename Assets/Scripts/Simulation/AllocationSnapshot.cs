@@ -3,7 +3,7 @@ using System;
 public enum AllocationFailure
 {
     None, MissingEmployee, MissingTask, InvalidHours, UnregisteredEmployee,
-    UnregisteredTask, CompletedTask, InsufficientHours, PlanningLocked
+    UnregisteredTask, CompletedTask, InsufficientHours
 }
 
 /// <summary>参照取得時の割当。可変の社員・タスク・辞書を公開しない。</summary>
