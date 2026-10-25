@@ -2,7 +2,9 @@
 
 かわいいハムスターたちが、実在する技術を使って、毎週発生する仕様変更・問い合わせ・障害などに対応しながらプロダクトを育てる開発現場シミュレーションゲーム。
 
-現在はUIを持たないシミュレーションレイヤーの実装を、GitHub Issue単位で段階的に進めている段階。
+現在は、当週の工数割当の変更・取消と、不変の週次レポートをドメインAPIから利用できる段階。
+
+割当・結果の契約は[PlanningAndReports](Assets/Docs/Domains/PlanningAndReports.md)を参照。
 
 ## 開発の進め方
 
@@ -17,7 +19,7 @@
 
 `Employee`や`DevelopmentTask`のような各ドメインオブジェクトは、自分自身の状態を自分で管理する。
 
-- `Employee`は自分の週あたり残り利用可能工数(`AvailableHours`)を持つ。公開の工数消費は`GameSimulation.TryAllocateHours`経由に限定し、内部で`TryConsumeHours`を呼ぶ。リセットは社員の週末処理内からのみ行う
+- `Employee`は自分の週あたり残り利用可能工数(`AvailableHours`)を持つ。公開の工数消費・返却は`GameSimulation.TryAllocateHours` / `TrySetAllocatedHours`経由に限定する。リセットは社員の週末処理内からのみ行う
 - `Employee`は自分が保有する基本スキル(`Skill`の集合)も自分で管理する(`AddSkill`)
 - `Employee`は疲労(`Fatigue`)を保持し、週末に消費勤務時間から疲労更新と勤務時間のリセットを行う(`CompleteWeek`)
 - `DevelopmentTask`は自分の補正後の累積進捗工数(`CompletedProgressHours`)を自分で持つ
@@ -31,6 +33,7 @@
 
 - `Employee.TryConsumeHours(hours)`（内部用）
 - `GameSimulation.TryAllocateHours(employee, task, hours)`
+- `GameSimulation.TrySetAllocatedHours(employee, task, hours)`：合計時間の設定。0で当週の割当を削除する
 
 一方、コンストラクタでの不正な初期値(範囲外のスキルレベルなど)は`ArgumentOutOfRangeException`をスローする。
 
@@ -67,7 +70,7 @@
 | `GameSimulation` | 自身のプロダクトを所有し、社員・タスクの登録、工数割り当て(`TryAllocateHours`)、週送り(`AdvanceWeek`)を管理する入口 |
 | `WeekProcessor` | スキル・疲労・開始時の負債で進捗を補正し、新規完了によるプロダクトの変化を合算して反映する |
 
-`GameSimulation.AdvanceWeek()`が内部の`WeekProcessor`と各社員へ処理を委譲する。週次順序・状態変化の反映時期は[ProductHealth](Assets/Docs/Domains/ProductHealth.md#週次順序)を参照。
+`GameSimulation.AdvanceWeek()`が内部の`WeekProcessor`と各社員へ処理を委譲し、不変の`WeekResult`を返す。`History`と`LastWeekResult`から確定済み結果を参照できる。週次順序・状態変化の反映時期は[ProductHealth](Assets/Docs/Domains/ProductHealth.md#週次順序)を参照。
 
 ### Product
 
@@ -96,7 +99,7 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 
 - 社員は勤務の稼働率に応じて疲労が蓄積・回復し、疲労が高いほど進捗が下がる。基本スキル自体の値は変えない。
 - 全タスクの進捗反映後に疲労を更新し、当週の負荷は翌週から効く。無割当の社員も回復する。
-- 疲労の値域・増減式・数値例・精度と調整方法は[Fatigue](Assets/Docs/Domains/Fatigue.md)を参照。UI、残業、休暇、スキル成長は対象外。
+- 疲労の値域・増減式・数値例・精度と調整方法は[Fatigue](Assets/Docs/Domains/Fatigue.md)を参照。残業、休暇、スキル成長は対象外。
 
 ### 技術的負債と品質
 
@@ -121,6 +124,7 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 - `ProductHealthCalculatorTests.cs`
 - `TaskProductProfileTests.cs`
 - `ProductHealthSimulationTests.cs`
+- `PlanningAndReportTests.cs`：割当編集・取消、不変のレポート、確定結果との一致、失敗時の状態維持、登録順の結果
 
 ドメイン内部操作の単体テストは、`InternalsVisibleTo`でテストアセンブリにアクセスを許可している。公開APIでは社員の勤務時間を直接消費・リセットしたり、タスクの進捗を直接反映したりできない。
 
