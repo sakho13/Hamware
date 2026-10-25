@@ -1,77 +1,106 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
-/// 社員ごとの実勤務工数をスキル・疲労・負債で補正し、進捗と新規完了によるプロダクトの変化を反映する。
-/// ゲーム状態は保持せず、GameSimulationから週次処理のたびに呼び出される。
+/// 更新前のスキル・疲労・負債で社員ごとの進捗を計算する。
+/// 状態変更と上限制御は各ドメインへ委譲し、新規完了の効果を合算する。
 /// </summary>
 internal sealed class WeekProcessor
 {
-    private readonly ProductivityCalculator _productivityCalculator = new ProductivityCalculator();
-
-    /// <summary>
-    /// 全割当の検証・計算が成功してから進捗と完了効果を反映する。計算中は状態を変更しない。
-    /// 当週の進捗はすべて開始時の負債で計算する。完了効果は合算して一度だけ状態へ反映する。
-    /// 割当辞書や社員の勤務時間・疲労は変更しない。完了を超えた進捗はタスク側で破棄する。
-    /// </summary>
-    /// <exception cref="ArgumentNullException">allocationsまたはproductがnullの場合</exception>
-    /// <exception cref="ArgumentException">割当内のタスクまたは社員別の割当がnullの場合</exception>
-    /// <exception cref="ArgumentOutOfRangeException">実勤務工数が負の場合</exception>
+    /// <summary>タスクとプロダクトだけを確定する。社員・割当辞書は変更しない。</summary>
+    /// <exception cref="ArgumentNullException">割当またはプロダクトがnullの場合。</exception>
+    /// <exception cref="ArgumentException">社員別割当がnullの場合。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">勤務時間が負の場合。</exception>
     internal void Process(IReadOnlyDictionary<DevelopmentTask, Dictionary<Employee, int>> allocations, ProductState product)
     {
-        if (allocations == null)
-        {
-            throw new ArgumentNullException(nameof(allocations));
-        }
+        Prepare(allocations, product).Commit();
+    }
 
-        if (product == null)
-        {
-            throw new ArgumentNullException(nameof(product));
-        }
+    /// <summary>
+    /// 全入力の検証、ドメインによる変更結果の計算、週報用の値の確保を済ませる。
+    /// 登録順を指定した場合、割当操作の順序によらずタスク・社員を登録順に報告する。
+    /// 社員一覧を指定した場合、無割当社員を含め週末処理も準備する。
+    /// </summary>
+    /// <exception cref="ArgumentNullException">allocationsまたはproductがnullの場合。</exception>
+    /// <exception cref="ArgumentException">割当の内容や登録順が不正な場合。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">勤務時間が負の場合。</exception>
+    /// <exception cref="OverflowException">進捗・完了効果の合計がdecimalの範囲を超える場合。</exception>
+    internal PreparedWeek Prepare(IReadOnlyDictionary<DevelopmentTask, Dictionary<Employee, int>> allocations,
+        ProductState product, IReadOnlyList<DevelopmentTask> taskOrder = null, IReadOnlyList<Employee> employees = null)
+    {
+        if (allocations == null) throw new ArgumentNullException(nameof(allocations));
+        if (product == null) throw new ArgumentNullException(nameof(product));
+        var tasks = taskOrder == null ? allocations.Keys.ToList() : taskOrder.Where(allocations.ContainsKey).ToList();
+        if (tasks.Count != allocations.Count)
+            throw new ArgumentException("登録済みタスクの順序に全割当を含めてください。", nameof(taskOrder));
 
+        var changes = new List<IPreparedChange>();
+        var taskResults = new List<TaskWeekResult>();
+        var employeeResults = new List<EmployeeWeekResult>();
         decimal debtMultiplier = ProductHealthCalculator.CalculateProductivityMultiplier(product.TechnicalDebt);
-        var results = new List<(DevelopmentTask Task, decimal Progress)>();
-        decimal technicalDebtChange = 0m;
-        decimal qualityChange = 0m;
-
-        // 1. 入力の検証と計算を全件済ませる。後続の割当が不正でも先行タスクは未変更のまま。
-        foreach (var allocation in allocations)
+        foreach (var task in tasks)
         {
-            var task = allocation.Key;
-            if (task == null || allocation.Value == null)
-            {
-                throw new ArgumentException("タスクと社員別の割当はnullにできません。", nameof(allocations));
-            }
-
-            if (task.IsCompleted)
-            {
-                continue;
-            }
+            var allocation = allocations[task];
+            if (allocation == null)
+                throw new ArgumentException("社員別の割当はnullにできません。", nameof(allocations));
+            if (task.IsCompleted) continue;
+            var orderedEmployees = employees == null ? allocation.Keys.ToList() : employees.Where(allocation.ContainsKey).ToList();
+            if (orderedEmployees.Count != allocation.Count)
+                throw new ArgumentException("未登録社員の割当があります。", nameof(employees));
 
             var profile = TaskSkillProfiles.Get(task.Type);
             var productProfile = TaskProductProfiles.Get(task.Type);
-            decimal productMultiplier = productProfile.IsDebtSensitive ? debtMultiplier : 1m;
-            decimal progress = 0m;
-            foreach (var employeeHours in allocation.Value)
-            {
-                progress += _productivityCalculator.CalculateProgress(employeeHours.Key, profile, employeeHours.Value)
-                    * productMultiplier;
-            }
-
-            results.Add((task, progress));
-            if (progress >= task.RequiredProgressHours - task.CompletedProgressHours)
-            {
-                technicalDebtChange += task.RequiredProgressHours * productProfile.TechnicalDebtChangePerProgressHour;
-                qualityChange += task.RequiredProgressHours * productProfile.QualityChangePerProgressHour;
-            }
+            decimal multiplier = productProfile.IsDebtSensitive ? debtMultiplier : 1m;
+            var contributions = orderedEmployees.Select(e => new WorkContribution(e, profile, allocation[e], multiplier)).ToList();
+            decimal calculated = contributions.Sum(c => c.CalculatedProgress);
+            var progress = task.PrepareProgress(calculated);
+            changes.Add(progress);
+            bool completed = progress.Result.CompletedThisWeek;
+            taskResults.Add(new TaskWeekResult(task, contributions, calculated, progress.Result,
+                completed ? task.RequiredProgressHours * productProfile.TechnicalDebtChangePerProgressHour : 0m,
+                completed ? task.RequiredProgressHours * productProfile.QualityChangePerProgressHour : 0m));
         }
 
-        // 2. 検証済みの計算結果だけを反映する。完了効果の計算も上で済ませ、部分更新を防ぐ。
-        foreach (var result in results)
+        var productChange = product.PrepareChanges(taskResults.Sum(t => t.TechnicalDebtChange), taskResults.Sum(t => t.QualityChange));
+        changes.Add(productChange);
+        if (employees != null)
         {
-            result.Task.ApplyProgress(result.Progress);
+            foreach (var employee in employees)
+            {
+                var completion = employee.PrepareWeekCompletion();
+                changes.Add(completion);
+                employeeResults.Add(completion.Result);
+            }
         }
+        return new PreparedWeek(changes, taskResults, employeeResults, productChange.Result);
+    }
+}
 
-        product.ApplyChanges(technicalDebtChange, qualityChange);
+/// <summary>
+/// 計算済みの週を一度だけ確定する。全所有者の状態を先に検証し、その後は代入だけを行う。
+/// 結果は各ドメインの確定値と共通で、週報側には疲労式・クランプ・完了判定を持たせない。
+/// </summary>
+internal sealed class PreparedWeek
+{
+    private readonly IReadOnlyList<IPreparedChange> _changes;
+    internal IReadOnlyList<TaskWeekResult> TaskResults { get; }
+    internal IReadOnlyList<EmployeeWeekResult> EmployeeResults { get; }
+    internal ProductWeekResult ProductResult { get; }
+
+    internal PreparedWeek(IEnumerable<IPreparedChange> changes, IEnumerable<TaskWeekResult> tasks,
+        IEnumerable<EmployeeWeekResult> employees, ProductWeekResult product)
+    {
+        _changes = changes.ToList().AsReadOnly();
+        TaskResults = tasks.ToList().AsReadOnly();
+        EmployeeResults = employees.ToList().AsReadOnly();
+        ProductResult = product;
+    }
+
+    /// <exception cref="InvalidOperationException">再確定、または計算後に状態が変わった場合。状態更新前に拒否する。</exception>
+    internal void Commit()
+    {
+        foreach (var change in _changes) change.Validate();
+        foreach (var change in _changes) change.Commit();
     }
 }

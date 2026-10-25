@@ -11,6 +11,8 @@ using System.Collections.Generic;
 /// </summary>
 public class Employee
 {
+    /// <summary>名前と独立した、生存期間中変わらない識別子。</summary>
+    public Guid Id { get; } = Guid.NewGuid();
     private readonly Dictionary<SkillType, Skill> _skills = new Dictionary<SkillType, Skill>();
 
     /// <summary>
@@ -97,9 +99,16 @@ public class Employee
     }
 
     /// <summary>
-    /// 残り利用可能工数をWeeklyAvailableHoursへリセットする。
-    /// 疲労更新後にCompleteWeekからのみ呼び出す。
+    /// 当週の割当を減らした分だけ返却する。進捗や疲労は変更しない。
     /// </summary>
+    internal void ReturnAllocatedHours(int hours)
+    {
+        if (hours < 0 || hours > WeeklyAvailableHours - AvailableHours)
+            throw new ArgumentOutOfRangeException(nameof(hours));
+        AvailableHours += hours;
+    }
+
+    /// <summary>社員自身の週末処理の確定時だけ週の工数を復元する。</summary>
     private void ResetWeeklyHours()
     {
         AvailableHours = WeeklyAvailableHours;
@@ -107,13 +116,28 @@ public class Employee
 
     /// <summary>
     /// 今週の消費勤務時間から疲労を更新した後、翌週の利用可能工数を復元する。
-    /// 全タスクの進捗反映後にGameSimulationから一度だけ呼び出す。
+    /// 変更結果を返す。GameSimulationは同じ準備処理を使い、全対象を検証後に一度だけ確定する。
     /// </summary>
-    internal void CompleteWeek()
+    internal EmployeeWeekResult CompleteWeek()
     {
-        int workedHours = WeeklyAvailableHours - AvailableHours;
-        Fatigue = FatigueCalculator.CalculateNextFatigue(Fatigue, workedHours, WeeklyAvailableHours);
-        ResetWeeklyHours();
+        return PrepareWeekCompletion().Commit();
+    }
+
+    /// <summary>社員自身が疲労と勤務時間の変更を計算し、確定に使う結果を用意する。</summary>
+    internal PreparedChange<EmployeeWeekResult> PrepareWeekCompletion()
+    {
+        int availableBefore = AvailableHours;
+        decimal fatigueBefore = Fatigue;
+        int workedHours = WeeklyAvailableHours - availableBefore;
+        decimal fatigueAfter = FatigueCalculator.CalculateNextFatigue(fatigueBefore, workedHours, WeeklyAvailableHours);
+        var result = new EmployeeWeekResult(Id, Name, workedHours, fatigueBefore, fatigueAfter);
+        return new PreparedChange<EmployeeWeekResult>(result,
+            () => AvailableHours == availableBefore && Fatigue == fatigueBefore,
+            () =>
+            {
+                Fatigue = result.FatigueAfter;
+                ResetWeeklyHours();
+            });
     }
 
     /// <summary>
