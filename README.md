@@ -19,7 +19,7 @@ Unity 6000.5.10f1で `Assets/Scenes/Hamware.unity` を開き、Playを押す。
 日本語表示はOSのYu Gothic / Meiryo / Noto Sans CJK JP / Hiragino Sansを利用する。Windowsの日本語環境を試作対象とし、フォントファイルは同梱しない。
 保存・復元、イベント、プロダクト公開は後続計画の対象。品質は現在、増減を確認する指標であり、障害への影響はまだない。
 
-割当・結果の契約と試作UIの責務は[PlanningAndReports](Assets/Docs/Domains/PlanningAndReports.md)を参照。
+割当・結果の契約は[PlanningAndReports](Assets/Docs/Domains/PlanningAndReports.md)、試作UIの責務は[PrototypeUI](Assets/Docs/PrototypeUI.md)を参照。
 
 ## 開発の進め方
 
@@ -57,7 +57,7 @@ Unity 6000.5.10f1で `Assets/Scenes/Hamware.unity` を開き、Playを押す。
 - `Assets/Scripts/Company/` : 社員・組織に関するドメインモデル(`Employee`, `Skill`, `SkillType`)
 - `Assets/Scripts/Product/` : プロダクトの状態と負債倍率(`ProductState`, `ProductHealthCalculator`)
 - `Assets/Scripts/Simulation/` : シミュレーション進行に関するドメインモデル(`DevelopmentTask`, `WeekProcessor`, `GameSimulation`)
-- `Assets/Scripts/UI/` : 表示と入力を担当する`HamwareUI`。計算はドメインへ委譲する
+- `Assets/Scripts/UI/` : 別アセンブリ`Hamware.UI`。画面・セッション・固定シナリオを持ち、`Hamware.Game`の公開APIだけを参照する
 
 `Employee`が`Simulation/`ではなく`Company/`に置かれているのは意図的な構造判断で、「誰が」を表す概念と「何を進めるか」を表す概念を分離している。
 
@@ -140,7 +140,9 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 - `ProductHealthCalculatorTests.cs`
 - `TaskProductProfileTests.cs`
 - `ProductHealthSimulationTests.cs`
-- `PlanningAndReportTests.cs`：割当編集・取消、不変のレポート、失敗時の状態維持、12週の試作シナリオ
+- `PlanningAndReportTests.cs`：割当編集・取消、不変のレポート、確定結果との一致、失敗時の状態維持、登録順の結果
+
+`Assets/Tests/UIEditMode/PrototypeSessionTests.cs`は、二重確定と週報中の編集拒否、再開始、アセンブリ境界、ドメイン定義からの文言生成を確認する。
 
 `Assets/Tests/PlayMode/PrototypeUITests.cs`は、画面の入力・ボタンから割当、拒否理由、取消、担当変更、確認、週報、12週の進行、改善・休養、全タスク完了後の週送り、再開始を確認する。UI ToolkitのClickEventを送る操作テストであり、OSのマウス装置を経由した操作ではない。
 
