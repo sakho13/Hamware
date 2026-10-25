@@ -2,9 +2,24 @@
 
 かわいいハムスターたちが、実在する技術を使って、毎週発生する仕様変更・問い合わせ・障害などに対応しながらプロダクトを育てる開発現場シミュレーションゲーム。
 
-現在は、当週の工数割当の変更・取消と、不変の週次レポートをドメインAPIから利用できる段階。
+現在は、社員2名へ工数を配分し、週次結果を確認できる最小プレイ画面まで実装している段階。
 
-割当・結果の契約は[PlanningAndReports](Assets/Docs/Domains/PlanningAndReports.md)を参照。
+## 試作版を遊ぶ
+
+Unity 6000.5.10f1で `Assets/Scenes/Hamware.unity` を開き、Playを押す。
+メニュー `Hamware > Open Playable Prototype` からも開ける。ビルド対象の先頭シーンもHamware。
+
+1. 左側でハムスター社員を選ぶ。
+2. タスクの入力欄へ、その社員から割り当てる**合計時間**を入力し「設定」を押す。「取消」または0hで取り消せる。
+3. 「1週間進める」で計画を確認し、確定する。残した時間は休養になる。
+4. 週報で勤務時間・進捗・完了効果・疲労の変化を確認し、次週の計画へ進む。
+
+社員2名、機能開発4件、Testing / Architecture各2件の固定シナリオ。画面に表示する進捗は小数3桁までだが、計算・レポートはdecimalのまま保持する。
+週報を閉じるまで次の週を確定できない。「最初から」は確認後に状態を初期化する。
+日本語表示はOSのYu Gothic / Meiryo / Noto Sans CJK JP / Hiragino Sansを利用する。Windowsの日本語環境を試作対象とし、フォントファイルは同梱しない。
+保存・復元、イベント、プロダクト公開は後続計画の対象。品質は現在、増減を確認する指標であり、障害への影響はまだない。
+
+割当・結果の契約は[PlanningAndReports](Assets/Docs/Domains/PlanningAndReports.md)、試作UIの責務は[PrototypeUI](Assets/Docs/PrototypeUI.md)を参照。
 
 ## 開発の進め方
 
@@ -42,6 +57,7 @@
 - `Assets/Scripts/Company/` : 社員・組織に関するドメインモデル(`Employee`, `Skill`, `SkillType`)
 - `Assets/Scripts/Product/` : プロダクトの状態と負債倍率(`ProductState`, `ProductHealthCalculator`)
 - `Assets/Scripts/Simulation/` : シミュレーション進行に関するドメインモデル(`DevelopmentTask`, `WeekProcessor`, `GameSimulation`)
+- `Assets/Scripts/UI/` : 別アセンブリ`Hamware.UI`。画面・セッション・固定シナリオを持ち、`Hamware.Game`の公開APIだけを参照する
 
 `Employee`が`Simulation/`ではなく`Company/`に置かれているのは意図的な構造判断で、「誰が」を表す概念と「何を進めるか」を表す概念を分離している。
 
@@ -125,6 +141,12 @@ var task = new DevelopmentTask("API実装", 40, TaskType.BackendImplementation);
 - `TaskProductProfileTests.cs`
 - `ProductHealthSimulationTests.cs`
 - `PlanningAndReportTests.cs`：割当編集・取消、不変のレポート、確定結果との一致、失敗時の状態維持、登録順の結果
+
+`Assets/Tests/UIEditMode/PrototypeSessionTests.cs`は、二重確定と週報中の編集拒否、再開始、アセンブリ境界、ドメイン定義からの文言生成を確認する。
+
+`Assets/Tests/PlayMode/PrototypeUITests.cs`は、画面の入力・ボタンから割当、拒否理由、取消、担当変更、確認、週報、12週の進行、改善・休養、全タスク完了後の週送り、再開始を確認する。UI ToolkitのClickEventを送る操作テストであり、OSのマウス装置を経由した操作ではない。
+
+環境変数`HAMWARE_CAPTURE_DIR`へ出力先を指定すると、同テストで1600×1000と1280×720の画面画像を保存し、数値カードと主要操作が画面内に収まることも確認する。社員欄・タスク欄・週報は必要に応じてスクロールできる。
 
 ドメイン内部操作の単体テストは、`InternalsVisibleTo`でテストアセンブリにアクセスを許可している。公開APIでは社員の勤務時間を直接消費・リセットしたり、タスクの進捗を直接反映したりできない。
 
